@@ -1,6 +1,28 @@
-@FurnitureOrders.Api_HostAddress = http://localhost:5233
+@host = https://localhost:7222
 
-GET {{FurnitureOrders.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### 1) Vytvoření zákazníka se špatným e-mailem (čekáme chybu 400)
+POST {{host}}/api/customers
+Content-Type: application/json
 
-###
+{ "customerNumber": "Z006", "type": 1, "name": "Test s.r.o.", "email": "jirisantora@gmail.com" }
+
+### 2) Vytvoření zákazníka správně (čekáme 201)
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{ "customerNumber": "Z002", "type": 1, "name": "Jirka s.r.o.", "email": "test@example.com" }
+
+### 3) Stejné číslo podruhé (čekáme 400 o duplicitě)
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{ "customerNumber": "Z001", "type": 1, "name": "Jiná firma", "email": "jina@example.com" }
+
+### 4) Seznam
+GET {{host}}/api/customers
+
+### 5) Deaktivace
+PATCH {{host}}/api/customers/1/active
+Content-Type: application/json
+
+{ "isActive": false }
