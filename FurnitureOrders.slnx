@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="FurnitureOrders.Api/FurnitureOrders.Api.csproj" />
+  <Project Path="FurnitureOrders.Client/FurnitureOrders.Client.csproj" />
+  <Project Path="FurnitureOrders.Shared/FurnitureOrders.Shared.csproj" />
+  <Project Path="FurnitureOrders.Tests/FurnitureOrders.Tests.csproj" />
+</Solution>
