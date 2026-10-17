@@ -21,6 +21,8 @@ namespace FurnitureOrders.Api.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence<int>("CustomerNumberSeq");
+
             modelBuilder.Entity("FurnitureOrders.Api.Domain.Customer", b =>
                 {
                     b.Property<int>("Id")

@@ -27,7 +27,6 @@ public class CustomerEditDto
 {
     public int Id { get; set; }
 
-    [Required(ErrorMessage = "Číslo zákazníka je povinné.")]
     [StringLength(30, ErrorMessage = "Maximálně {1} znaků.")]
     public string CustomerNumber { get; set; } = "";
 

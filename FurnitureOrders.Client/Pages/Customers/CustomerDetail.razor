@@ -1,0 +1,112 @@
+﻿@page "/customers/{Id:int}"
+@inject CustomerApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Detail zákazníka</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="customers" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_c is not null)
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudText Typo="Typo.h5">@_c.Name</MudText>
+            <MudChip T="string" Size="Size.Small" Color="@(_c.IsActive ? Color.Success : Color.Default)">
+                @(_c.IsActive ? "Aktivní" : "Neaktivní")
+            </MudChip>
+        </MudStack>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Href="customers" Variant="Variant.Outlined">Zpět</MudButton>
+            <MudButton OnClick="ToggleActiveAsync" Variant="Variant.Outlined"
+                       Color="@(_c.IsActive ? Color.Warning : Color.Success)">
+                @(_c.IsActive ? "Deaktivovat" : "Aktivovat")
+            </MudButton>
+            <MudButton Href="@($"customers/{_c.Id}/edit")" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Edit">Upravit</MudButton>
+        </MudStack>
+    </MudStack>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Základní údaje</MudText>
+        <MudGrid>
+            @Row("Číslo zákazníka", _c.CustomerNumber)
+            @Row("Typ", _c.Type == CustomerType.Company ? "Firma" : "Fyzická osoba")
+            @Row("IČO", _c.CompanyId)
+            @Row("DIČ", _c.VatId)
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Kontakt</MudText>
+        <MudGrid>
+            @Row("Kontaktní osoba", _c.ContactPerson)
+            @Row("E-mail", _c.Email)
+            @Row("Telefon", _c.Phone)
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Adresa</MudText>
+        <MudGrid>
+            @Row("Ulice", _c.Street)
+            @Row("Město", _c.City)
+            @Row("PSČ", _c.PostalCode)
+            @Row("Země", _c.Country)
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Poznámka</MudText>
+        <MudText Style="white-space:pre-wrap">@(string.IsNullOrWhiteSpace(_c.Note) ? "—" : _c.Note)</MudText>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private CustomerEditDto? _c;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await Api.GetAsync(Id);
+        _loading = false;
+
+        if (result.IsSuccess) _c = result.Value;
+        else
+        {
+            _c = null;
+            _error = result.Message ?? "Zákazníka se nepodařilo načíst.";
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        var result = await Api.SetActiveAsync(Id, !_c!.IsActive);
+        if (result.IsSuccess)
+        {
+            _c = result.Value;
+            Snackbar.Add("Stav zákazníka byl změněn.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+
+    private RenderFragment Row(string label, string? value) =>
+        @<MudItem xs="12" md="6">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@label</MudText>
+            <MudText>@(string.IsNullOrWhiteSpace(value) ? "—" : value)</MudText>
+        </MudItem>;
+}

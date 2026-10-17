@@ -1,0 +1,151 @@
+﻿@page "/customers"
+@inject CustomerApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Zákazníci</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h5">Zákazníci</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add" Href="customers/new">
+        Nový zákazník
+    </MudButton>
+</MudStack>
+
+<MudPaper Class="pa-3 mb-4">
+    <MudStack Row="true" Spacing="3">
+        <MudTextField T="string" Label="Hledat (číslo, název)" Value="_search"
+                      ValueChanged="OnSearchChanged" DebounceInterval="300"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Clearable="true" Style="min-width:280px" />
+        <MudSelect T="bool?" Label="Stav" Value="_isActive" ValueChanged="OnActiveChanged" Style="max-width:200px">
+            <MudSelectItem T="bool?" Value="@((bool?)null)">Všichni</MudSelectItem>
+            <MudSelectItem T="bool?" Value="@((bool?)true)">Aktivní</MudSelectItem>
+            <MudSelectItem T="bool?" Value="@((bool?)false)">Neaktivní</MudSelectItem>
+        </MudSelect>
+    </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        @_error
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Zkusit znovu</MudButton>
+    </MudAlert>
+}
+else
+{
+    <MudPaper>
+        <MudSimpleTable Hover="true" Dense="true">
+            <thead>
+                <tr>
+                    <th>@SortHeader("Číslo", "number")</th>
+                    <th>@SortHeader("Název", "name")</th>
+                    <th>Typ</th>
+                    <th>Kontakt</th>
+                    <th>@SortHeader("E-mail", "email")</th>
+                    <th>@SortHeader("Město", "city")</th>
+                    <th>Stav</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in _items)
+                {
+                    <tr>
+                        <td>@c.CustomerNumber</td>
+                        <td>@c.Name</td>
+                        <td>@(c.Type == CustomerType.Company ? "Firma" : "Fyzická osoba")</td>
+                        <td>@c.ContactPerson</td>
+                        <td>@c.Email</td>
+                        <td>@c.City</td>
+                        <td>
+                            <MudChip T="string" Size="Size.Small" Color="@(c.IsActive ? Color.Success : Color.Default)">
+                                @(c.IsActive ? "Aktivní" : "Neaktivní")
+                            </MudChip>
+                        </td>
+                        <td style="white-space:nowrap">
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
+                                           Href="@($"customers/{c.Id}")" title="Detail" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                           Href="@($"customers/{c.Id}/edit")" title="Upravit" />
+                            <MudIconButton Icon="@(c.IsActive ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                                           Size="Size.Small" title="@(c.IsActive ? "Deaktivovat" : "Aktivovat")"
+                                           OnClick="@(() => ToggleActiveAsync(c))" />
+                        </td>
+                    </tr>
+                }
+                @if (_items.Count == 0 && !_loading)
+                {
+                    <tr><td colspan="8" class="pa-4">Žádní zákazníci neodpovídají filtru.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<CustomerListItemDto> _items = [];
+    private string? _search;
+    private bool? _isActive;
+    private string _sortBy = "number";
+    private bool _desc;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await Api.ListAsync(new CustomerQuery(_search, _isActive, _sortBy, _desc));
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Seznam zákazníků se nepodařilo načíst. Server není dostupný.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnSearchChanged(string? value) { _search = value; return LoadAsync(); }
+    private Task OnActiveChanged(bool? value) { _isActive = value; return LoadAsync(); }
+
+    private Task SortAsync(string key)
+    {
+        _desc = _sortBy == key && !_desc;
+        _sortBy = key;
+        return LoadAsync();
+    }
+
+    private string? SortIcon(string key) =>
+        _sortBy != key ? null : _desc ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward;
+
+    private RenderFragment SortHeader(string text, string key) =>
+        @<MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Inherit"
+            EndIcon="@SortIcon(key)" OnClick="@(() => SortAsync(key))">@text</MudButton>;
+
+    private async Task ToggleActiveAsync(CustomerListItemDto c)
+    {
+        var result = await Api.SetActiveAsync(c.Id, !c.IsActive);
+        if (result.IsSuccess)
+        {
+            Snackbar.Add(c.IsActive ? "Zákazník byl deaktivován." : "Zákazník byl aktivován.", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+}

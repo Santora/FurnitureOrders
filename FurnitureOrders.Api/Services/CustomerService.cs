@@ -60,6 +60,10 @@ public class CustomerService(AppDbContext db) : ICustomerService
     public async Task<OperationResult<CustomerEditDto>> CreateAsync(CustomerEditDto dto, CancellationToken ct)
     {
         Normalize(dto);
+
+        if (string.IsNullOrEmpty(dto.CustomerNumber))
+            dto.CustomerNumber = await NextNumberAsync(ct);
+
         var errors = ModelValidator.Validate(dto);
         if (errors.Count > 0)
             return OperationResult<CustomerEditDto>.Invalid(errors);
@@ -84,6 +88,9 @@ public class CustomerService(AppDbContext db) : ICustomerService
         var errors = ModelValidator.Validate(dto);
         if (errors.Count > 0)
             return OperationResult<CustomerEditDto>.Invalid(errors);
+
+        if (string.IsNullOrEmpty(dto.CustomerNumber))
+            errors[nameof(CustomerEditDto.CustomerNumber)] = ["Číslo zákazníka je povinné."];
 
         if (await db.Customers.AnyAsync(c => c.CustomerNumber == dto.CustomerNumber && c.Id != id, ct))
             return Duplicate();
@@ -184,5 +191,19 @@ public class CustomerService(AppDbContext db) : ICustomerService
             Note = e.Note,
             IsActive = e.IsActive
         };
+    }
+    private async Task<string> NextNumberAsync(CancellationToken ct)
+    {
+        while (true)
+        {
+            var n = await db.Database
+                .SqlQuery<int>($"SELECT NEXT VALUE FOR CustomerNumberSeq AS [Value]")
+                .SingleAsync(ct);
+            var number = $"Z{n:D5}";
+
+            // přeskočí číslo, které už někdo zadal ručně
+            if (!await db.Customers.AnyAsync(c => c.CustomerNumber == number, ct))
+                return number;
+        }
     }
 }
