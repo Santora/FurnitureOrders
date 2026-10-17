@@ -1,0 +1,204 @@
+﻿@page "/customers/new"
+@page "/customers/{Id:int}/edit"
+@inject CustomerApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(IsNew ? "Nový zákazník" : "Úprava zákazníka")</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">@(IsNew ? "Nový zákazník" : "Úprava zákazníka")</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="customers" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_model is not null && _ctx is not null)
+{
+    <EditForm EditContext="_ctx" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        @if (_general.Count > 0)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                @foreach (var m in _general)
+                {
+                    <div>@m</div>
+                }
+            </MudAlert>
+        }
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Základní údaje</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.CustomerNumber" For="@(() => _model.CustomerNumber)"
+                                  Label="Číslo zákazníka *" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect T="CustomerType" @bind-Value="_model.Type" Label="Typ zákazníka">
+                        <MudSelectItem T="CustomerType" Value="CustomerType.Company">Firma</MudSelectItem>
+                        <MudSelectItem T="CustomerType" Value="CustomerType.Individual">Fyzická osoba</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4" Class="d-flex align-center">
+                    <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Primary" Label="Aktivní" />
+                </MudItem>
+                <MudItem xs="12" md="8">
+                    <MudTextField @bind-Value="_model.Name" For="@(() => _model.Name)"
+                                  Label="@(_model.Type == CustomerType.Company ? "Název firmy *" : "Celé jméno *")" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudTextField @bind-Value="_model.CompanyId" For="@(() => _model.CompanyId)" Label="IČO" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudTextField @bind-Value="_model.VatId" For="@(() => _model.VatId)" Label="DIČ" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Kontakt</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.ContactPerson" For="@(() => _model.ContactPerson)" Label="Kontaktní osoba" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.Email" For="@(() => _model.Email)" Label="E-mail" InputType="InputType.Email" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.Phone" For="@(() => _model.Phone)" Label="Telefon" InputType="InputType.Telephone" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Adresa</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_model.Street" For="@(() => _model.Street)" Label="Ulice" />
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudTextField @bind-Value="_model.City" For="@(() => _model.City)" Label="Město" />
+                </MudItem>
+                <MudItem xs="12" md="1">
+                    <MudTextField @bind-Value="_model.PostalCode" For="@(() => _model.PostalCode)" Label="PSČ" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudTextField @bind-Value="_model.Country" For="@(() => _model.Country)" Label="Země" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Poznámka</MudText>
+            <MudTextField @bind-Value="_model.Note" For="@(() => _model.Note)"
+                          Lines="4" Label="Poznámka" />
+        </MudPaper>
+
+        <MudStack Row="true" Spacing="2">
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving">
+                @(_saving ? "Ukládám…" : "Uložit")
+            </MudButton>
+            <MudButton Href="@(IsNew ? "customers" : $"customers/{Id}")" Variant="Variant.Outlined" Disabled="_saving">
+                Zrušit
+            </MudButton>
+        </MudStack>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private bool IsNew => Id is null;
+    private CustomerEditDto? _model;
+    private EditContext? _ctx;
+    private ValidationMessageStore? _store;
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+    private readonly List<string> _general = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+
+        if (IsNew)
+        {
+            Init(new CustomerEditDto());
+            return;
+        }
+
+        _loading = true;
+        var result = await Api.GetAsync(Id!.Value);
+        _loading = false;
+
+        if (result.IsSuccess)
+        {
+            Init(result.Value!);
+        }
+        else
+        {
+            _model = null;
+            _error = result.Message ?? "Zákazníka se nepodařilo načíst.";
+        }
+    }
+
+    private void Init(CustomerEditDto model)
+    {
+        _model = model;
+        _general.Clear();
+        _ctx = new EditContext(model);
+        _store = new ValidationMessageStore(_ctx);
+        _ctx.OnFieldChanged += (_, e) => _store!.Clear(e.FieldIdentifier);
+        _ctx.OnValidationRequested += (_, _) => _store!.Clear();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _general.Clear();
+
+        var result = IsNew
+            ? await Api.CreateAsync(_model!)
+            : await Api.UpdateAsync(Id!.Value, _model!);
+
+        _saving = false;
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add("Zákazník byl uložen.", Severity.Success);
+            Nav.NavigateTo($"customers/{result.Value!.Id}");
+            return;
+        }
+
+        if (result.Errors.Count > 0)
+            ApplyServerErrors(result.Errors);
+        else
+            _general.Add(result.Message ?? "Uložení se nepodařilo.");
+    }
+
+    private void ApplyServerErrors(Dictionary<string, string[]> errors)
+    {
+        var props = typeof(CustomerEditDto).GetProperties();
+
+        foreach (var (key, messages) in errors)
+        {
+            var prop = props.FirstOrDefault(p => string.Equals(p.Name, key, StringComparison.OrdinalIgnoreCase));
+            if (prop is null)
+            {
+                _general.AddRange(messages);
+                continue;
+            }
+
+            foreach (var message in messages)
+                _store!.Add(new FieldIdentifier(_model!, prop.Name), message);
+        }
+
+        _ctx!.NotifyValidationStateChanged();
+    }
+}
