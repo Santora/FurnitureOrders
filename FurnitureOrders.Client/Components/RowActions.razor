@@ -1,0 +1,14 @@
+﻿<span style="white-space:nowrap">
+    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Href="@DetailHref" title="Detail" />
+    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Href="@EditHref" title="Upravit" />
+    <MudIconButton Icon="@(IsActive ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
+                   Size="Size.Small" title="@(IsActive ? "Deaktivovat" : "Aktivovat")"
+                   OnClick="@(() => OnToggleActive.InvokeAsync())" />
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string DetailHref { get; set; } = "";
+    [Parameter, EditorRequired] public string EditHref { get; set; } = "";
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public EventCallback OnToggleActive { get; set; }
+}

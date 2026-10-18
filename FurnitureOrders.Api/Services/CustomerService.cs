@@ -194,16 +194,24 @@ public class CustomerService(AppDbContext db) : ICustomerService
     }
     private async Task<string> NextNumberAsync(CancellationToken ct)
     {
-        while (true)
+        await db.Database.OpenConnectionAsync(ct);
+        try
         {
-            var n = await db.Database
-                .SqlQuery<int>($"SELECT NEXT VALUE FOR CustomerNumberSeq AS [Value]")
-                .SingleAsync(ct);
-            var number = $"Z{n:D5}";
+            while (true)
+            {
+                await using var cmd = db.Database.GetDbConnection().CreateCommand();
+                cmd.CommandText = "SELECT NEXT VALUE FOR CustomerNumberSeq";
+                var n = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
+                var number = $"Z{n:D5}";
 
-            // přeskočí číslo, které už někdo zadal ručně
-            if (!await db.Customers.AnyAsync(c => c.CustomerNumber == number, ct))
-                return number;
+                // přeskočí číslo, které už někdo zadal ručně
+                if (!await db.Customers.AnyAsync(c => c.CustomerNumber == number, ct))
+                    return number;
+            }
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
         }
     }
 }

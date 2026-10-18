@@ -1,0 +1,14 @@
+﻿<MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Inherit"
+           Style="text-transform:none; font-weight:inherit; font-size:inherit; padding:0; min-width:0"
+           EndIcon="@Icon" OnClick="@(() => OnSort.InvokeAsync(Key))">@Text</MudButton>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter, EditorRequired] public string Key { get; set; } = "";
+    [Parameter] public string? CurrentKey { get; set; }
+    [Parameter] public bool Desc { get; set; }
+    [Parameter] public EventCallback<string> OnSort { get; set; }
+
+    private string? Icon => CurrentKey != Key ? null
+        : Desc ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward;
+}

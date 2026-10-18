@@ -1,0 +1,11 @@
+﻿<MudStack Row="true" Spacing="2">
+    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="Saving">
+        @(Saving ? "Ukládám…" : "Uložit")
+    </MudButton>
+    <MudButton Href="@CancelHref" Variant="Variant.Outlined" Disabled="Saving">Zrušit</MudButton>
+</MudStack>
+
+@code {
+    [Parameter] public bool Saving { get; set; }
+    [Parameter, EditorRequired] public string CancelHref { get; set; } = "";
+}

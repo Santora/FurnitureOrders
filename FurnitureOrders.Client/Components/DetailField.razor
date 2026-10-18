@@ -1,0 +1,10 @@
+﻿<MudItem xs="12" md="@Md">
+    <MudText Typo="Typo.caption" Color="Color.Secondary">@Label</MudText>
+    <MudText>@(string.IsNullOrWhiteSpace(Value) ? "—" : Value)</MudText>
+</MudItem>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public int Md { get; set; } = 6;
+}

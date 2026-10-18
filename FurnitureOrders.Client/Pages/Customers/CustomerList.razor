@@ -4,27 +4,19 @@
 
 <PageTitle>Zákazníci</PageTitle>
 
-<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-    <MudText Typo="Typo.h5">Zákazníci</MudText>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.Add" Href="customers/new">
-        Nový zákazník
-    </MudButton>
-</MudStack>
+<MudText Typo="Typo.h5" Class="mb-3">Zákazníci</MudText>
 
-<MudPaper Class="pa-3 mb-4">
-    <MudStack Row="true" Spacing="3">
-        <MudTextField T="string" Label="Hledat (číslo, název)" Value="_search"
-                      ValueChanged="OnSearchChanged" DebounceInterval="300"
-                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                      Clearable="true" Style="min-width:280px" />
-        <MudSelect T="bool?" Label="Stav" Value="_isActive" ValueChanged="OnActiveChanged" Style="max-width:200px">
-            <MudSelectItem T="bool?" Value="@((bool?)null)">Všichni</MudSelectItem>
-            <MudSelectItem T="bool?" Value="@((bool?)true)">Aktivní</MudSelectItem>
-            <MudSelectItem T="bool?" Value="@((bool?)false)">Neaktivní</MudSelectItem>
-        </MudSelect>
-    </MudStack>
-</MudPaper>
+<ListToolbar NewHref="customers/new" NewText="Nový zákazník">
+    <MudTextField T="string" Label="Hledat (číslo, název)" Value="_search"
+                  ValueChanged="OnSearchChanged" DebounceInterval="300"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Clearable="true" Style="min-width:260px; flex:1" />
+    <MudSelect T="bool?" Label="Stav" Value="_isActive" ValueChanged="OnActiveChanged" Style="max-width:200px">
+        <MudSelectItem T="bool?" Value="@((bool?)null)">Všichni</MudSelectItem>
+        <MudSelectItem T="bool?" Value="@((bool?)true)">Aktivní</MudSelectItem>
+        <MudSelectItem T="bool?" Value="@((bool?)false)">Neaktivní</MudSelectItem>
+    </MudSelect>
+</ListToolbar>
 
 @if (_loading)
 {
@@ -40,16 +32,16 @@
 }
 else
 {
-    <MudPaper>
+    <MudPaper Style="overflow-x:auto">
         <MudSimpleTable Hover="true" Dense="true">
             <thead>
                 <tr>
-                    <th>@SortHeader("Číslo", "number")</th>
-                    <th>@SortHeader("Název", "name")</th>
+                    <th><SortableHeader Text="Číslo" Key="number" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Název" Key="name" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
                     <th>Typ</th>
                     <th>Kontakt</th>
-                    <th>@SortHeader("E-mail", "email")</th>
-                    <th>@SortHeader("Město", "city")</th>
+                    <th><SortableHeader Text="E-mail" Key="email" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Město" Key="city" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
                     <th>Stav</th>
                     <th></th>
                 </tr>
@@ -60,23 +52,14 @@ else
                     <tr>
                         <td>@c.CustomerNumber</td>
                         <td>@c.Name</td>
-                        <td>@(c.Type == CustomerType.Company ? "Firma" : "Fyzická osoba")</td>
+                        <td>@Labels.Of(c.Type)</td>
                         <td>@c.ContactPerson</td>
                         <td>@c.Email</td>
                         <td>@c.City</td>
+                        <td><ActiveChip IsActive="c.IsActive" /></td>
                         <td>
-                            <MudChip T="string" Size="Size.Small" Color="@(c.IsActive ? Color.Success : Color.Default)">
-                                @(c.IsActive ? "Aktivní" : "Neaktivní")
-                            </MudChip>
-                        </td>
-                        <td style="white-space:nowrap">
-                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small"
-                                           Href="@($"customers/{c.Id}")" title="Detail" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                           Href="@($"customers/{c.Id}/edit")" title="Upravit" />
-                            <MudIconButton Icon="@(c.IsActive ? Icons.Material.Filled.Block : Icons.Material.Filled.CheckCircle)"
-                                           Size="Size.Small" title="@(c.IsActive ? "Deaktivovat" : "Aktivovat")"
-                                           OnClick="@(() => ToggleActiveAsync(c))" />
+                            <RowActions DetailHref="@($"customers/{c.Id}")" EditHref="@($"customers/{c.Id}/edit")"
+                                        IsActive="c.IsActive" OnToggleActive="@(() => ToggleActiveAsync(c))" />
                         </td>
                     </tr>
                 }
@@ -127,13 +110,6 @@ else
         _sortBy = key;
         return LoadAsync();
     }
-
-    private string? SortIcon(string key) =>
-        _sortBy != key ? null : _desc ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward;
-
-    private RenderFragment SortHeader(string text, string key) =>
-        @<MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Inherit"
-            EndIcon="@SortIcon(key)" OnClick="@(() => SortAsync(key))">@text</MudButton>;
 
     private async Task ToggleActiveAsync(CustomerListItemDto c)
     {

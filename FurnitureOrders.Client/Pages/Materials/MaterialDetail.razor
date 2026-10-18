@@ -1,0 +1,89 @@
+﻿@page "/materials/{Id:int}"
+@inject MaterialApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Detail materiálu</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="materials" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_m is not null)
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudText Typo="Typo.h5">@_m.Name</MudText>
+            <ActiveChip IsActive="_m.IsActive" />
+        </MudStack>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Href="materials" Variant="Variant.Outlined">Zpět</MudButton>
+            <MudButton OnClick="ToggleActiveAsync" Variant="Variant.Outlined"
+                       Color="@(_m.IsActive ? Color.Warning : Color.Success)">
+                @(_m.IsActive ? "Deaktivovat" : "Aktivovat")
+            </MudButton>
+            <MudButton Href="@($"materials/{_m.Id}/edit")" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Edit">Upravit</MudButton>
+        </MudStack>
+    </MudStack>
+
+    <FormSection Title="Základní údaje">
+        <DetailField Label="Kód materiálu" Value="@_m.Code" />
+        <DetailField Label="Typ" Value="@Labels.Of(_m.Type)" />
+        <DetailField Label="Měrná jednotka" Value="@_m.Unit" />
+        <DetailField Label="Barva / dekor" Value="@_m.ColorOrDecor" />
+    </FormSection>
+
+    <FormSection Title="Nákup a dodavatel">
+        <DetailField Label="Nákupní cena" Value="@_m.PurchasePrice?.ToString("N2")" />
+        <DetailField Label="Minimální objednací množství" Value="@_m.MinOrderQuantity?.ToString("0.###")" />
+        <DetailField Label="Dodavatel" Value="@_m.Supplier" />
+        <DetailField Label="Skladové číslo" Value="@_m.StockNumber" />
+    </FormSection>
+
+    <FormSection Title="Popis a poznámka">
+        <DetailField Label="Popis" Value="@_m.Description" />
+        <DetailField Label="Poznámka" Value="@_m.Note" />
+    </FormSection>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private MaterialEditDto? _m;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await Api.GetAsync(Id);
+        _loading = false;
+
+        if (result.IsSuccess) _m = result.Value;
+        else
+        {
+            _m = null;
+            _error = result.Message ?? "Materiál se nepodařilo načíst.";
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        var result = await Api.SetActiveAsync(Id, !_m!.IsActive);
+        if (result.IsSuccess)
+        {
+            _m = result.Value;
+            Snackbar.Add("Stav materiálu byl změněn.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+}

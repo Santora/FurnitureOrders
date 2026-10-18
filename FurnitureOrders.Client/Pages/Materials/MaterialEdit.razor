@@ -1,0 +1,146 @@
+﻿@page "/materials/new"
+@page "/materials/{Id:int}/edit"
+@inject MaterialApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(IsNew ? "Nový materiál" : "Úprava materiálu")</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">@(IsNew ? "Nový materiál" : "Úprava materiálu")</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="materials" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_model is not null && _ctx is not null && _server is not null)
+{
+    <EditForm EditContext="_ctx" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ErrorList Messages="_server.General" />
+
+        <FormSection Title="Základní údaje">
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_model.Code" For="@(() => _model.Code)" Label="Kód materiálu *" />
+            </MudItem>
+            <MudItem xs="12" md="5">
+                <MudTextField @bind-Value="_model.Name" For="@(() => _model.Name)" Label="Název *" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudTextField @bind-Value="_model.Unit" For="@(() => _model.Unit)" Label="Měrná jednotka *" />
+            </MudItem>
+            <MudItem xs="12" md="2" Class="d-flex align-center">
+                <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Primary" Label="Aktivní" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="MaterialType" @bind-Value="_model.Type" Label="Typ materiálu">
+                    @foreach (var t in Enum.GetValues<MaterialType>())
+                    {
+                        <MudSelectItem T="MaterialType" Value="t">@Labels.Of(t)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.ColorOrDecor" For="@(() => _model.ColorOrDecor)" Label="Barva / dekor" />
+            </MudItem>
+        </FormSection>
+
+        <FormSection Title="Nákup a dodavatel">
+            <MudItem xs="12" md="3">
+                <MudNumericField T="decimal?" @bind-Value="_model.PurchasePrice" For="@(() => _model.PurchasePrice)"
+                                 Label="Nákupní cena" HideSpinButtons="true" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudNumericField T="decimal?" @bind-Value="_model.MinOrderQuantity" For="@(() => _model.MinOrderQuantity)"
+                                 Label="Minimální objednací množství" HideSpinButtons="true" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.Supplier" For="@(() => _model.Supplier)" Label="Dodavatel" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudTextField @bind-Value="_model.StockNumber" For="@(() => _model.StockNumber)" Label="Skladové číslo" />
+            </MudItem>
+        </FormSection>
+
+        <FormSection Title="Popis a poznámka">
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_model.Description" For="@(() => _model.Description)" Label="Popis" Lines="4" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_model.Note" For="@(() => _model.Note)" Label="Poznámka" Lines="4" />
+            </MudItem>
+        </FormSection>
+
+        <FormActions Saving="_saving" CancelHref="@(IsNew ? "materials" : $"materials/{Id}")" />
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private bool IsNew => Id is null;
+    private MaterialEditDto? _model;
+    private EditContext? _ctx;
+    private ServerValidation? _server;
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+
+        if (IsNew)
+        {
+            Init(new MaterialEditDto());
+            return;
+        }
+
+        _loading = true;
+        var result = await Api.GetAsync(Id!.Value);
+        _loading = false;
+
+        if (result.IsSuccess)
+        {
+            Init(result.Value!);
+        }
+        else
+        {
+            _model = null;
+            _error = result.Message ?? "Materiál se nepodařilo načíst.";
+        }
+    }
+
+    private void Init(MaterialEditDto model)
+    {
+        _model = model;
+        _ctx = new EditContext(model);
+        _server = new ServerValidation(_ctx);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _server!.General.Clear();
+
+        var result = IsNew
+            ? await Api.CreateAsync(_model!)
+            : await Api.UpdateAsync(Id!.Value, _model!);
+
+        _saving = false;
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add("Materiál byl uložen.", Severity.Success);
+            Nav.NavigateTo($"materials/{result.Value!.Id}");
+            return;
+        }
+
+        if (result.Errors.Count > 0) _server.Apply(result.Errors);
+        else _server.General.Add(result.Message ?? "Uložení se nepodařilo.");
+    }
+}

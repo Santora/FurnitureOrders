@@ -3,6 +3,7 @@ using FurnitureOrders.Client.Services;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
+using System.Globalization;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -14,5 +15,8 @@ var apiBase = builder.Configuration["ApiBaseUrl"]
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBase) });
 builder.Services.AddMudServices();
 builder.Services.AddScoped<CustomerApiClient>();
+builder.Services.AddScoped<MaterialApiClient>();
+CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("cs-CZ");
+CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("cs-CZ");
 
 await builder.Build().RunAsync();

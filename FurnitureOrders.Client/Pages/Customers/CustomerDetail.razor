@@ -15,12 +15,10 @@ else if (_error is not null)
 }
 else if (_c is not null)
 {
-    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
             <MudText Typo="Typo.h5">@_c.Name</MudText>
-            <MudChip T="string" Size="Size.Small" Color="@(_c.IsActive ? Color.Success : Color.Default)">
-                @(_c.IsActive ? "Aktivní" : "Neaktivní")
-            </MudChip>
+            <ActiveChip IsActive="_c.IsActive" />
         </MudStack>
         <MudStack Row="true" Spacing="2">
             <MudButton Href="customers" Variant="Variant.Outlined">Zpět</MudButton>
@@ -33,39 +31,29 @@ else if (_c is not null)
         </MudStack>
     </MudStack>
 
-    <MudPaper Class="pa-4 mb-4">
-        <MudText Typo="Typo.h6" Class="mb-3">Základní údaje</MudText>
-        <MudGrid>
-            @Row("Číslo zákazníka", _c.CustomerNumber)
-            @Row("Typ", _c.Type == CustomerType.Company ? "Firma" : "Fyzická osoba")
-            @Row("IČO", _c.CompanyId)
-            @Row("DIČ", _c.VatId)
-        </MudGrid>
-    </MudPaper>
+    <FormSection Title="Základní údaje">
+        <DetailField Label="Číslo zákazníka" Value="@_c.CustomerNumber" />
+        <DetailField Label="Typ" Value="@Labels.Of(_c.Type)" />
+        <DetailField Label="IČO" Value="@_c.CompanyId" />
+        <DetailField Label="DIČ" Value="@_c.VatId" />
+    </FormSection>
 
-    <MudPaper Class="pa-4 mb-4">
-        <MudText Typo="Typo.h6" Class="mb-3">Kontakt</MudText>
-        <MudGrid>
-            @Row("Kontaktní osoba", _c.ContactPerson)
-            @Row("E-mail", _c.Email)
-            @Row("Telefon", _c.Phone)
-        </MudGrid>
-    </MudPaper>
+    <FormSection Title="Kontakt">
+        <DetailField Label="Kontaktní osoba" Value="@_c.ContactPerson" />
+        <DetailField Label="E-mail" Value="@_c.Email" />
+        <DetailField Label="Telefon" Value="@_c.Phone" />
+    </FormSection>
 
-    <MudPaper Class="pa-4 mb-4">
-        <MudText Typo="Typo.h6" Class="mb-3">Adresa</MudText>
-        <MudGrid>
-            @Row("Ulice", _c.Street)
-            @Row("Město", _c.City)
-            @Row("PSČ", _c.PostalCode)
-            @Row("Země", _c.Country)
-        </MudGrid>
-    </MudPaper>
+    <FormSection Title="Adresa">
+        <DetailField Label="Ulice" Value="@_c.Street" />
+        <DetailField Label="Město" Value="@_c.City" />
+        <DetailField Label="PSČ" Value="@_c.PostalCode" />
+        <DetailField Label="Země" Value="@_c.Country" />
+    </FormSection>
 
-    <MudPaper Class="pa-4">
-        <MudText Typo="Typo.h6" Class="mb-3">Poznámka</MudText>
-        <MudText Style="white-space:pre-wrap">@(string.IsNullOrWhiteSpace(_c.Note) ? "—" : _c.Note)</MudText>
-    </MudPaper>
+    <FormSection Title="Poznámka">
+        <DetailField Label="Poznámka" Value="@_c.Note" Md="12" />
+    </FormSection>
 }
 
 @code {
@@ -103,10 +91,4 @@ else if (_c is not null)
             Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
         }
     }
-
-    private RenderFragment Row(string label, string? value) =>
-        @<MudItem xs="12" md="6">
-            <MudText Typo="Typo.caption" Color="Color.Secondary">@label</MudText>
-            <MudText>@(string.IsNullOrWhiteSpace(value) ? "—" : value)</MudText>
-        </MudItem>;
 }

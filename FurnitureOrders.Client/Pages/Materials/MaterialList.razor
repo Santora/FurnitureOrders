@@ -1,0 +1,136 @@
+﻿@page "/materials"
+@inject MaterialApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Materiály</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-3">Materiály</MudText>
+
+<ListToolbar NewHref="materials/new" NewText="Nový materiál">
+    <MudTextField T="string" Label="Hledat (kód, název)" Value="_search"
+                  ValueChanged="OnSearchChanged" DebounceInterval="300"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Clearable="true" Style="min-width:260px; flex:1" />
+    <MudSelect T="MaterialType?" Label="Typ" Value="_type" ValueChanged="OnTypeChanged" Style="max-width:220px">
+        <MudSelectItem T="MaterialType?" Value="@((MaterialType?)null)">Všechny</MudSelectItem>
+        @foreach (var t in Enum.GetValues<MaterialType>())
+        {
+            <MudSelectItem T="MaterialType?" Value="@((MaterialType?)t)">@Labels.Of(t)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="bool?" Label="Stav" Value="_isActive" ValueChanged="OnActiveChanged" Style="max-width:180px">
+        <MudSelectItem T="bool?" Value="@((bool?)null)">Všechny</MudSelectItem>
+        <MudSelectItem T="bool?" Value="@((bool?)true)">Aktivní</MudSelectItem>
+        <MudSelectItem T="bool?" Value="@((bool?)false)">Neaktivní</MudSelectItem>
+    </MudSelect>
+</ListToolbar>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        @_error
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Zkusit znovu</MudButton>
+    </MudAlert>
+}
+else
+{
+    <MudPaper Style="overflow-x:auto">
+        <MudSimpleTable Hover="true" Dense="true">
+            <thead>
+                <tr>
+                    <th><SortableHeader Text="Kód" Key="code" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Název" Key="name" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Typ" Key="type" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th>MJ</th>
+                    <th><SortableHeader Text="Nákupní cena" Key="price" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th>Dodavatel</th>
+                    <th>Stav</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in _items)
+                {
+                    <tr>
+                        <td>@m.Code</td>
+                        <td>@m.Name</td>
+                        <td>@Labels.Of(m.Type)</td>
+                        <td>@m.Unit</td>
+                        <td>@m.PurchasePrice?.ToString("N2")</td>
+                        <td>@m.Supplier</td>
+                        <td><ActiveChip IsActive="m.IsActive" /></td>
+                        <td>
+                            <RowActions DetailHref="@($"materials/{m.Id}")" EditHref="@($"materials/{m.Id}/edit")"
+                                        IsActive="m.IsActive" OnToggleActive="@(() => ToggleActiveAsync(m))" />
+                        </td>
+                    </tr>
+                }
+                @if (_items.Count == 0 && !_loading)
+                {
+                    <tr><td colspan="8" class="pa-4">Žádné materiály neodpovídají filtru.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<MaterialListItemDto> _items = [];
+    private string? _search;
+    private bool? _isActive;
+    private MaterialType? _type;
+    private string _sortBy = "code";
+    private bool _desc;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await Api.ListAsync(new MaterialQuery(_search, _isActive, _type, _sortBy, _desc));
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Seznam materiálů se nepodařilo načíst. Server není dostupný.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnSearchChanged(string? v) { _search = v; return LoadAsync(); }
+    private Task OnActiveChanged(bool? v) { _isActive = v; return LoadAsync(); }
+    private Task OnTypeChanged(MaterialType? v) { _type = v; return LoadAsync(); }
+
+    private Task SortAsync(string key)
+    {
+        _desc = _sortBy == key && !_desc;
+        _sortBy = key;
+        return LoadAsync();
+    }
+
+    private async Task ToggleActiveAsync(MaterialListItemDto m)
+    {
+        var result = await Api.SetActiveAsync(m.Id, !m.IsActive);
+        if (result.IsSuccess)
+        {
+            Snackbar.Add(m.IsActive ? "Materiál byl deaktivován." : "Materiál byl aktivován.", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+}
