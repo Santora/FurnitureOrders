@@ -18,6 +18,7 @@ builder.Services.AddScoped<CustomerApiClient>();
 builder.Services.AddScoped<MaterialApiClient>();
 builder.Services.AddScoped<OperationApiClient>();
 builder.Services.AddScoped<ProductApiClient>();
+builder.Services.AddScoped<ProductRoutingApiClient>();
 
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("cs-CZ");
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("cs-CZ");

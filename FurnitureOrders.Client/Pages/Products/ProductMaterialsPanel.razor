@@ -1,0 +1,132 @@
+﻿@inject ProductRoutingApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudText Typo="Typo.h6">Materiály výrobku</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => OpenAsync(null))">Přidat materiál</MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-3">
+        @_error
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Zkusit znovu</MudButton>
+    </MudAlert>
+}
+else
+{
+    <MudPaper Style="overflow-x:auto">
+        <MudSimpleTable Hover="true" Dense="true">
+            <thead>
+                <tr>
+                    <th>Pořadí</th>
+                    <th>Kód</th>
+                    <th>Materiál</th>
+                    <th>Množství</th>
+                    <th>MJ</th>
+                    <th>Odpad (%)</th>
+                    <th>Poznámka</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in _items)
+                {
+                    <tr>
+                        <td>@m.Sequence</td>
+                        <td>@m.MaterialCode</td>
+                        <td>@m.MaterialName</td>
+                        <td>@m.Quantity.ToString("0.###")</td>
+                        <td>@m.Unit</td>
+                        <td>@m.WastePercent?.ToString("0.##")</td>
+                        <td>@m.Note</td>
+                        <td style="white-space:nowrap">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" title="Upravit"
+                                           OnClick="@(() => OpenAsync(m))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" title="Odebrat"
+                                           OnClick="@(() => DeleteAsync(m))" />
+                        </td>
+                    </tr>
+                }
+                @if (_items.Count == 0 && !_loading)
+                {
+                    <tr><td colspan="8" class="pa-4">Výrobek zatím nemá přiřazené žádné materiály.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public int ProductId { get; set; }
+
+    private IReadOnlyList<ProductMaterialDto> _items = [];
+    private bool _loading;
+    private string? _error;
+    private int _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == ProductId) return;
+        _loadedFor = ProductId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await Api.ListMaterialsAsync(ProductId);
+        _loading = false;
+
+        if (result.IsSuccess) _items = result.Value!;
+        else _error = result.Message ?? "Materiály se nepodařilo načíst.";
+    }
+
+    private async Task OpenAsync(ProductMaterialDto? item)
+    {
+        var parameters = new DialogParameters<ProductMaterialDialog>
+        {
+            { x => x.ProductId, ProductId },
+            { x => x.Item, item }
+        };
+
+        var dialog = await Dialogs.ShowAsync<ProductMaterialDialog>(
+            item is null ? "Přidat materiál" : "Upravit materiál", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Materiál byl uložen.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(ProductMaterialDto item)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Odebrat materiál",
+            $"Opravdu odebrat materiál {item.MaterialCode} z výrobku?",
+            yesText: "Odebrat", cancelText: "Zrušit");
+        if (confirmed != true) return;
+
+        var result = await Api.DeleteMaterialAsync(ProductId, item.Id);
+        if (result.IsSuccess)
+        {
+            Snackbar.Add("Materiál byl odebrán.", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Odebrání se nepodařilo.", Severity.Error);
+        }
+    }
+}

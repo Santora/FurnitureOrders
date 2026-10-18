@@ -1,0 +1,150 @@
+﻿@inject ProductRoutingApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudText Typo="Typo.h6">Technologický postup (operace)</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => OpenAsync(null))">Přidat operaci</MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-3">
+        @_error
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Zkusit znovu</MudButton>
+    </MudAlert>
+}
+else
+{
+    <MudPaper Style="overflow-x:auto">
+        <MudSimpleTable Hover="true" Dense="true">
+            <thead>
+                <tr>
+                    <th>Pořadí</th>
+                    <th>Kód</th>
+                    <th>Operace</th>
+                    <th>Pracoviště</th>
+                    <th>Příprava (min)</th>
+                    <th>Výroba 1 ks (min)</th>
+                    <th>Popis postupu</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < _items.Count; i++)
+                {
+                    var o = _items[i];
+                    var first = i == 0;
+                    var last = i == _items.Count - 1;
+                    <tr>
+                        <td>@o.Sequence</td>
+                        <td>@o.OperationCode</td>
+                        <td>@o.OperationName</td>
+                        <td>@o.Workplace</td>
+                        <td>@o.SetupMinutes</td>
+                        <td>@o.RunMinutesPerUnit?.ToString("0.##")</td>
+                        <td style="max-width:320px; white-space:pre-wrap">@o.WorkInstructions</td>
+                        <td style="white-space:nowrap">
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" title="Posunout nahoru"
+                                           Disabled="@(first || _busy)" OnClick="@(() => MoveAsync(o, -1))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" title="Posunout dolů"
+                                           Disabled="@(last || _busy)" OnClick="@(() => MoveAsync(o, 1))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" title="Upravit"
+                                           OnClick="@(() => OpenAsync(o))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" title="Odebrat"
+                                           OnClick="@(() => DeleteAsync(o))" />
+                        </td>
+                    </tr>
+                }
+                @if (_items.Count == 0 && !_loading)
+                {
+                    <tr><td colspan="8" class="pa-4">Výrobek zatím nemá žádné operace.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public int ProductId { get; set; }
+
+    private IReadOnlyList<ProductOperationDto> _items = [];
+    private bool _loading;
+    private bool _busy;
+    private string? _error;
+    private int _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == ProductId) return;
+        _loadedFor = ProductId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await Api.ListOperationsAsync(ProductId);
+        _loading = false;
+
+        if (result.IsSuccess) _items = result.Value!;
+        else _error = result.Message ?? "Operace se nepodařilo načíst.";
+    }
+
+    private async Task OpenAsync(ProductOperationDto? item)
+    {
+        var parameters = new DialogParameters<ProductOperationDialog>
+        {
+            { x => x.ProductId, ProductId },
+            { x => x.Item, item }
+        };
+
+        var dialog = await Dialogs.ShowAsync<ProductOperationDialog>(
+            item is null ? "Přidat operaci" : "Upravit operaci", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Operace byla uložena.", Severity.Success);
+            await LoadAsync();
+        }
+    }
+
+    private async Task MoveAsync(ProductOperationDto item, int direction)
+    {
+        _busy = true;
+        var result = await Api.MoveOperationAsync(ProductId, item.Id, direction);
+        _busy = false;
+
+        if (result.IsSuccess) await LoadAsync();
+        else Snackbar.Add(result.Message ?? "Změna pořadí se nepodařila.", Severity.Error);
+    }
+
+    private async Task DeleteAsync(ProductOperationDto item)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Odebrat operaci",
+            $"Opravdu odebrat operaci {item.OperationCode} z výrobku?",
+            yesText: "Odebrat", cancelText: "Zrušit");
+        if (confirmed != true) return;
+
+        var result = await Api.DeleteOperationAsync(ProductId, item.Id);
+        if (result.IsSuccess)
+        {
+            Snackbar.Add("Operace byla odebrána.", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Odebrání se nepodařilo.", Severity.Error);
+        }
+    }
+}

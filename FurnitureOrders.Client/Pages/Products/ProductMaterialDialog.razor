@@ -1,0 +1,124 @@
+﻿@inject ProductRoutingApiClient Api
+@inject MaterialApiClient Materials
+
+<EditForm EditContext="_ctx" OnValidSubmit="SaveAsync">
+    <DataAnnotationsValidator />
+    <MudDialog>
+        <DialogContent>
+            <ErrorList Messages="_server.General" />
+            <MudGrid>
+                <MudItem xs="12" md="9">
+                    <MudAutocomplete T="MaterialListItemDto" Label="Materiál *" Value="_selected"
+                                     ValueChanged="OnSelected" SearchFunc="SearchAsync"
+                                     ToStringFunc="@(m => m is null ? string.Empty : $"{m.Code} – {m.Name}")"
+                                     ResetValueOnEmptyText="true" Clearable="true"
+                                     ShowProgressIndicator="false" />
+                    <MudText HtmlTag="div" Typo="Typo.caption" Color="Color.Error">
+                        <ValidationMessage For="@(() => _model.MaterialId)" />
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudNumericField T="int?" @bind-Value="_model.Sequence" For="@(() => _model.Sequence)"
+                                     Label="Pořadí" HelperText="Prázdné = na konec" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal?" @bind-Value="_model.Quantity" For="@(() => _model.Quantity)"
+                                     Label="Množství *" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.Unit" For="@(() => _model.Unit)"
+                                  Label="Měrná jednotka" HelperText="Prázdné = z materiálu" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal?" @bind-Value="_model.WastePercent" For="@(() => _model.WastePercent)"
+                                     Label="Odpad (%)" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.Note" For="@(() => _model.Note)" Label="Poznámka" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => MudDialog.Cancel())" Disabled="_saving">Zrušit</MudButton>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving">
+                @(_saving ? "Ukládám…" : "Uložit")
+            </MudButton>
+        </DialogActions>
+    </MudDialog>
+</EditForm>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public int ProductId { get; set; }
+    [Parameter] public ProductMaterialDto? Item { get; set; }
+
+    private ProductMaterialEditDto _model = new();
+    private EditContext _ctx = default!;
+    private ServerValidation _server = default!;
+    private MaterialListItemDto? _selected;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        if (Item is not null)
+        {
+            _model = new ProductMaterialEditDto
+            {
+                MaterialId = Item.MaterialId,
+                Sequence = Item.Sequence,
+                Quantity = Item.Quantity,
+                Unit = Item.Unit,
+                WastePercent = Item.WastePercent,
+                Note = Item.Note
+            };
+            // jen pro zobrazení vybraného materiálu; ostatní údaje se nepoužívají
+            _selected = new MaterialListItemDto(Item.MaterialId, Item.MaterialCode, Item.MaterialName,
+                MaterialType.Other, Item.Unit, null, null, true);
+        }
+
+        _ctx = new EditContext(_model);
+        _server = new ServerValidation(_ctx);
+    }
+
+    private async Task<IEnumerable<MaterialListItemDto>> SearchAsync(string? text, CancellationToken ct)
+    {
+        try
+        {
+            var items = await Materials.ListAsync(new MaterialQuery(text, true, null, "name", false), ct);
+            return items.Take(20);
+        }
+        catch (HttpRequestException)
+        {
+            return [];
+        }
+    }
+
+    private void OnSelected(MaterialListItemDto? material)
+    {
+        var previous = _selected;
+        _selected = material;
+        _model.MaterialId = material?.Id;
+
+        // jednotku přebereme z materiálu, pokud je prázdná nebo pocházela z předchozího výběru
+        if (material is not null && (string.IsNullOrWhiteSpace(_model.Unit) || _model.Unit == previous?.Unit))
+            _model.Unit = material.Unit;
+
+        _ctx.NotifyFieldChanged(_ctx.Field(nameof(ProductMaterialEditDto.MaterialId)));
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _server.General.Clear();
+
+        var result = Item is null
+            ? await Api.CreateMaterialAsync(ProductId, _model)
+            : await Api.UpdateMaterialAsync(ProductId, Item.Id, _model);
+
+        _saving = false;
+
+        if (result.IsSuccess) MudDialog.Close(DialogResult.Ok(true));
+        else if (result.Errors.Count > 0) _server.Apply(result.Errors);
+        else _server.General.Add(result.Message ?? "Uložení se nepodařilo.");
+    }
+}
