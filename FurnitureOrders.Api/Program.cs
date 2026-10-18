@@ -14,6 +14,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 
 builder.Services.AddOpenApi();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IMaterialService, MaterialService>();
 
 
 
@@ -27,5 +28,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors();
 app.MapCustomerEndpoints();
+app.MapMaterialEndpoints();
 
 app.Run();

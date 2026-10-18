@@ -1,28 +1,51 @@
+# @host = https://localhost:7222
+
+# ### 1) Vytvoření zákazníka se špatným e-mailem (čekáme chybu 400)
+# POST {{host}}/api/customers
+# Content-Type: application/json
+
+# { "customerNumber": "Z006", "type": 1, "name": "Test s.r.o.", "email": "jirisantora@gmail.com" }
+
+# ### 2) Vytvoření zákazníka správně (čekáme 201)
+# POST {{host}}/api/customers
+# Content-Type: application/json
+
+# { "customerNumber": "Z002", "type": 1, "name": "Jirka s.r.o.", "email": "test@example.com" }
+
+# ### 3) Stejné číslo podruhé (čekáme 400 o duplicitě)
+# POST {{host}}/api/customers
+# Content-Type: application/json
+
+# { "customerNumber": "Z001", "type": 1, "name": "Jiná firma", "email": "jina@example.com" }
+
+# ### 4) Seznam
+# GET {{host}}/api/customers
+
+# ### 5) Deaktivace
+# PATCH {{host}}/api/customers/1/active
+# Content-Type: application/json
+
+# { "isActive": false }
+
 @host = https://localhost:7222
 
-### 1) Vytvoření zákazníka se špatným e-mailem (čekáme chybu 400)
-POST {{host}}/api/customers
+### Záporná cena a chybějící jednotka (čekáme 400)
+POST {{host}}/api/materials
 Content-Type: application/json
 
-{ "customerNumber": "Z006", "type": 1, "name": "Test s.r.o.", "email": "jirisantora@gmail.com" }
+{ "code": "M001", "name": "Lamino bílé 18 mm", "type": 1, "purchasePrice": -5 }
 
-### 2) Vytvoření zákazníka správně (čekáme 201)
-POST {{host}}/api/customers
+### Správně (201)
+POST {{host}}/api/materials
 Content-Type: application/json
 
-{ "customerNumber": "Z002", "type": 1, "name": "Jirka s.r.o.", "email": "test@example.com" }
+{ "code": "M001", "name": "Lamino bílé 18 mm", "type": 1, "unit": "m2", "purchasePrice": 250.50, "colorOrDecor": "Bílá" }
 
-### 3) Stejné číslo podruhé (čekáme 400 o duplicitě)
-POST {{host}}/api/customers
+### Duplicitní kód (400)
+POST {{host}}/api/materials
 Content-Type: application/json
 
-{ "customerNumber": "Z001", "type": 1, "name": "Jiná firma", "email": "jina@example.com" }
+{ "code": "M001", "name": "Jiný", "type": 2, "unit": "ks" }
 
-### 4) Seznam
-GET {{host}}/api/customers
-
-### 5) Deaktivace
-PATCH {{host}}/api/customers/1/active
-Content-Type: application/json
-
-{ "isActive": false }
+### Seznam s filtrem typu
+GET {{host}}/api/materials?type=1&sortBy=price&desc=true

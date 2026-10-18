@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
+using FurnitureOrders.Shared.Common;
 using FurnitureOrders.Shared.Customers;
 
 namespace FurnitureOrders.Client.Services;

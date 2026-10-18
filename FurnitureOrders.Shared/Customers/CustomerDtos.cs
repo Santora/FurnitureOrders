@@ -21,7 +21,7 @@ public record CustomerListItemDto(
     string? City,
     bool IsActive);
 
-public record SetActiveRequest(bool IsActive);
+//public record SetActiveRequest(bool IsActive);
 
 public class CustomerEditDto
 {

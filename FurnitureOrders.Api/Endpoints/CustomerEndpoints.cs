@@ -1,4 +1,5 @@
 ﻿using FurnitureOrders.Api.Services;
+using FurnitureOrders.Shared.Common;
 using FurnitureOrders.Shared.Customers;
 
 namespace FurnitureOrders.Api.Endpoints;
@@ -12,28 +13,19 @@ public static class CustomerEndpoints
         _ = g.MapGet("/", async ([AsParameters] CustomerQuery query, ICustomerService svc, CancellationToken ct) =>
             Results.Ok(await svc.ListAsync(query, ct)));
 
-        _ = g.MapGet("/{id:int}", async (int id, ICustomerService svc, CancellationToken ct) =>
-            await svc.GetAsync(id, ct) is { } c ? Results.Ok(c) : Results.NotFound());
-
         _ = g.MapPost("/", async (CustomerEditDto dto, ICustomerService svc, CancellationToken ct) =>
-            ToHttp(await svc.CreateAsync(dto, ct), c => Results.Created($"/api/customers/{c.Id}", c)));
+            (await svc.CreateAsync(dto, ct)).ToHttp(c => Results.Created($"/api/customers/{c.Id}", c)));
 
         _ = g.MapPut("/{id:int}", async (int id, CustomerEditDto dto, ICustomerService svc, CancellationToken ct) =>
-            ToHttp(await svc.UpdateAsync(id, dto, ct), Results.Ok));
+            (await svc.UpdateAsync(id, dto, ct)).ToHttp(Results.Ok));
 
         _ = g.MapPatch("/{id:int}/active", async (int id, SetActiveRequest req, ICustomerService svc, CancellationToken ct) =>
-            ToHttp(await svc.SetActiveAsync(id, req.IsActive, ct), Results.Ok));
+            (await svc.SetActiveAsync(id, req.IsActive, ct)).ToHttp(Results.Ok));
+
+        _ = g.MapGet("/{id:int}", async (int id, ICustomerService svc, CancellationToken ct) =>
+            await svc.GetAsync(id, ct) is { } c ? Results.Ok(c) : Results.NotFound());
 
         return app;
     }
 
-    private static IResult ToHttp<T>(OperationResult<T> r, Func<T, IResult> ok)
-    {
-        return r.Status switch
-        {
-            OperationStatus.Ok => ok(r.Value!),
-            OperationStatus.NotFound => Results.NotFound(),
-            _ => Results.ValidationProblem(r.Errors!.ToDictionary(e => e.Key, e => e.Value))
-        };
-    }
 }
