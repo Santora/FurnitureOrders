@@ -16,6 +16,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IMaterialService, MaterialService>();
 builder.Services.AddScoped<IOperationService, OperationService>();
+builder.Services.AddScoped<IProductService, ProductService>();
 
 
 
@@ -31,5 +32,6 @@ app.UseCors();
 app.MapCustomerEndpoints();
 app.MapMaterialEndpoints();
 app.MapOperationEndpoints();
+app.MapProductEndpoints();
 
 app.Run();

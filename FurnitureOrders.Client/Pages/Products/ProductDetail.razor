@@ -1,0 +1,94 @@
+﻿@page "/products/{Id:int}"
+@inject ProductApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Detail výrobku</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="products" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_p is not null)
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudText Typo="Typo.h5">@_p.Name</MudText>
+            <ActiveChip IsActive="_p.IsActive" />
+        </MudStack>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Href="products" Variant="Variant.Outlined">Zpět</MudButton>
+            <MudButton OnClick="ToggleActiveAsync" Variant="Variant.Outlined"
+                       Color="@(_p.IsActive ? Color.Warning : Color.Success)">
+                @(_p.IsActive ? "Deaktivovat" : "Aktivovat")
+            </MudButton>
+            <MudButton Href="@($"products/{_p.Id}/edit")" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Edit">Upravit</MudButton>
+        </MudStack>
+    </MudStack>
+
+    <FormSection Title="Základní údaje">
+        <DetailField Label="Kód výrobku" Value="@_p.Code" />
+        <DetailField Label="Měrná jednotka" Value="@_p.Unit" />
+        <DetailField Label="Skupina výrobků" Value="@_p.ProductGroup" />
+        <DetailField Label="Typ výrobku" Value="@_p.ProductType" />
+    </FormSection>
+
+    <FormSection Title="Cena a dodání">
+        <DetailField Label="Prodejní cena" Value="@_p.SalesPrice?.ToString("N2")" />
+        <DetailField Label="Doba dodání (dny)" Value="@_p.DeliveryDays?.ToString()" />
+    </FormSection>
+
+    <FormSection Title="Rozměry a hmotnost">
+        <DetailField Label="Šířka" Value="@_p.Width?.ToString("0.#")" Md="3" />
+        <DetailField Label="Výška" Value="@_p.Height?.ToString("0.#")" Md="3" />
+        <DetailField Label="Hloubka" Value="@_p.Depth?.ToString("0.#")" Md="3" />
+        <DetailField Label="Hmotnost" Value="@_p.Weight?.ToString("0.##")" Md="3" />
+    </FormSection>
+
+    <FormSection Title="Popis a poznámka">
+        <DetailField Label="Popis" Value="@_p.Description" />
+        <DetailField Label="Poznámka" Value="@_p.Note" />
+    </FormSection>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ProductEditDto? _p;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await Api.GetAsync(Id);
+        _loading = false;
+
+        if (result.IsSuccess) _p = result.Value;
+        else
+        {
+            _p = null;
+            _error = result.Message ?? "Výrobek se nepodařilo načíst.";
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        var result = await Api.SetActiveAsync(Id, !_p!.IsActive);
+        if (result.IsSuccess)
+        {
+            _p = result.Value;
+            Snackbar.Add("Stav výrobku byl změněn.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+}

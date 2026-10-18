@@ -125,3 +125,39 @@ PATCH {{host}}/api/operations/{{createOperation.response.body.$.id}}/active
 Content-Type: application/json
 
 { "isActive": false }
+
+
+###############################################################
+# VÝROBKY
+###############################################################
+
+### Chybí cena a záporná šířka: čekáme 400
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "code": "HP001", "name": "Psací stůl Alfa", "unit": "ks", "width": -1 }
+
+### Správně: čekáme 201
+# @name createProduct
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "code": "HP001", "name": "Psací stůl Alfa", "unit": "ks", "salesPrice": 4990, "productGroup": "Stoly", "width": 140, "height": 75, "depth": 70, "deliveryDays": 14 }
+
+### Duplicitní kód: čekáme 400
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "code": "HP001", "name": "Jiný", "unit": "ks", "salesPrice": 100 }
+
+### Seznam podle skupiny
+GET {{host}}/api/products?group=Stoly&sortBy=price&desc=true
+
+### Nabídka skupin
+GET {{host}}/api/products/groups
+
+### Deaktivace
+PATCH {{host}}/api/products/{{createProduct.response.body.$.id}}/active
+Content-Type: application/json
+
+{ "isActive": false }

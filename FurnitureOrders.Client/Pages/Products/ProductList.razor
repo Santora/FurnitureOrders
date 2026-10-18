@@ -1,0 +1,143 @@
+﻿@page "/products"
+@inject ProductApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Výrobky</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-3">Výrobky</MudText>
+
+<ListToolbar NewHref="products/new" NewText="Nový výrobek">
+    <MudTextField T="string" Label="Hledat (kód, název)" Value="_search"
+                  ValueChanged="OnSearchChanged" DebounceInterval="300"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Clearable="true" Style="min-width:260px; flex:1" />
+    <MudSelect T="string" Label="Skupina" Value="_group" ValueChanged="OnGroupChanged" Style="max-width:240px">
+        <MudSelectItem T="string" Value="@((string?)null)">Všechny</MudSelectItem>
+        @foreach (var g in _groups)
+        {
+            <MudSelectItem T="string" Value="@g">@g</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSelect T="bool?" Label="Stav" Value="_isActive" ValueChanged="OnActiveChanged" Style="max-width:180px">
+        <MudSelectItem T="bool?" Value="@((bool?)null)">Všechny</MudSelectItem>
+        <MudSelectItem T="bool?" Value="@((bool?)true)">Aktivní</MudSelectItem>
+        <MudSelectItem T="bool?" Value="@((bool?)false)">Neaktivní</MudSelectItem>
+    </MudSelect>
+</ListToolbar>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        @_error
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Zkusit znovu</MudButton>
+    </MudAlert>
+}
+else
+{
+    <MudPaper Style="overflow-x:auto">
+        <MudSimpleTable Hover="true" Dense="true">
+            <thead>
+                <tr>
+                    <th><SortableHeader Text="Kód" Key="code" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Název" Key="name" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Skupina" Key="group" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th>Typ</th>
+                    <th>MJ</th>
+                    <th><SortableHeader Text="Prodejní cena" Key="price" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th>Dodání (dny)</th>
+                    <th>Stav</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _items)
+                {
+                    <tr>
+                        <td>@p.Code</td>
+                        <td>@p.Name</td>
+                        <td>@p.ProductGroup</td>
+                        <td>@p.ProductType</td>
+                        <td>@p.Unit</td>
+                        <td>@p.SalesPrice.ToString("N2")</td>
+                        <td>@p.DeliveryDays</td>
+                        <td><ActiveChip IsActive="p.IsActive" /></td>
+                        <td>
+                            <RowActions DetailHref="@($"products/{p.Id}")" EditHref="@($"products/{p.Id}/edit")"
+                                        IsActive="p.IsActive" OnToggleActive="@(() => ToggleActiveAsync(p))" />
+                        </td>
+                    </tr>
+                }
+                @if (_items.Count == 0 && !_loading)
+                {
+                    <tr><td colspan="9" class="pa-4">Žádné výrobky neodpovídají filtru.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<ProductListItemDto> _items = [];
+    private IReadOnlyList<string> _groups = [];
+    private string? _search;
+    private string? _group;
+    private bool? _isActive;
+    private string _sortBy = "code";
+    private bool _desc;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _groups = await Api.GroupsAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await Api.ListAsync(new ProductQuery(_search, _isActive, _group, _sortBy, _desc));
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Seznam výrobků se nepodařilo načíst. Server není dostupný.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnSearchChanged(string? v) { _search = v; return LoadAsync(); }
+    private Task OnActiveChanged(bool? v) { _isActive = v; return LoadAsync(); }
+    private Task OnGroupChanged(string? v) { _group = v; return LoadAsync(); }
+
+    private Task SortAsync(string key)
+    {
+        _desc = _sortBy == key && !_desc;
+        _sortBy = key;
+        return LoadAsync();
+    }
+
+    private async Task ToggleActiveAsync(ProductListItemDto p)
+    {
+        var result = await Api.SetActiveAsync(p.Id, !p.IsActive);
+        if (result.IsSuccess)
+        {
+            Snackbar.Add(p.IsActive ? "Výrobek byl deaktivován." : "Výrobek byl aktivován.", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+}
