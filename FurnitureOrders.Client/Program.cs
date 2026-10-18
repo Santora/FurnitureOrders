@@ -16,6 +16,8 @@ builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBase) 
 builder.Services.AddMudServices();
 builder.Services.AddScoped<CustomerApiClient>();
 builder.Services.AddScoped<MaterialApiClient>();
+builder.Services.AddScoped<OperationApiClient>();
+
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("cs-CZ");
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("cs-CZ");
 

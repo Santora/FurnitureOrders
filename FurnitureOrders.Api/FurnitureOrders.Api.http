@@ -1,51 +1,127 @@
-# @host = https://localhost:7222
-
-# ### 1) Vytvoření zákazníka se špatným e-mailem (čekáme chybu 400)
-# POST {{host}}/api/customers
-# Content-Type: application/json
-
-# { "customerNumber": "Z006", "type": 1, "name": "Test s.r.o.", "email": "jirisantora@gmail.com" }
-
-# ### 2) Vytvoření zákazníka správně (čekáme 201)
-# POST {{host}}/api/customers
-# Content-Type: application/json
-
-# { "customerNumber": "Z002", "type": 1, "name": "Jirka s.r.o.", "email": "test@example.com" }
-
-# ### 3) Stejné číslo podruhé (čekáme 400 o duplicitě)
-# POST {{host}}/api/customers
-# Content-Type: application/json
-
-# { "customerNumber": "Z001", "type": 1, "name": "Jiná firma", "email": "jina@example.com" }
-
-# ### 4) Seznam
-# GET {{host}}/api/customers
-
-# ### 5) Deaktivace
-# PATCH {{host}}/api/customers/1/active
-# Content-Type: application/json
-
-# { "isActive": false }
-
 @host = https://localhost:7222
 
-### Záporná cena a chybějící jednotka (čekáme 400)
+###############################################################
+# ZÁKAZNÍCI
+###############################################################
+
+### Prázdný požadavek: čekáme 400 (název povinný)
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{ "type": 1 }
+
+### Špatný e-mail: čekáme 400
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{ "name": "Test s.r.o.", "type": 1, "email": "neplatny" }
+
+### Číslo se vygeneruje (Z00001...): čekáme 201
+# @name createCustomer
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{ "name": "Http Test s.r.o.", "type": 1, "email": "http@example.com", "city": "Brno" }
+
+### Duplicitní číslo zákazníka: čekáme 400
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{ "customerNumber": "{{createCustomer.response.body.$.customerNumber}}", "name": "Jiná firma", "type": 1 }
+
+### Seznam, hledání a řazení
+GET {{host}}/api/customers?search=http&sortBy=name&desc=true
+
+### Detail
+GET {{host}}/api/customers/{{createCustomer.response.body.$.id}}
+
+### Úprava
+PUT {{host}}/api/customers/{{createCustomer.response.body.$.id}}
+Content-Type: application/json
+
+{ "id": {{createCustomer.response.body.$.id}}, "customerNumber": "{{createCustomer.response.body.$.customerNumber}}", "name": "Http Test upraveno", "type": 1, "isActive": true }
+
+### Deaktivace
+PATCH {{host}}/api/customers/{{createCustomer.response.body.$.id}}/active
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Jen neaktivní
+GET {{host}}/api/customers?isActive=false
+
+### Neexistující záznam: čekáme 404
+GET {{host}}/api/customers/999999
+
+###############################################################
+# MATERIÁLY
+###############################################################
+
+### Záporná cena a chybějící jednotka: čekáme 400
 POST {{host}}/api/materials
 Content-Type: application/json
 
-{ "code": "M001", "name": "Lamino bílé 18 mm", "type": 1, "purchasePrice": -5 }
+{ "code": "HM001", "name": "Lamino bílé 18 mm", "type": 1, "purchasePrice": -5 }
 
-### Správně (201)
+### Správně: čekáme 201
+# @name createMaterial
 POST {{host}}/api/materials
 Content-Type: application/json
 
-{ "code": "M001", "name": "Lamino bílé 18 mm", "type": 1, "unit": "m2", "purchasePrice": 250.50, "colorOrDecor": "Bílá" }
+{ "code": "HM001", "name": "Lamino bílé 18 mm", "type": 1, "unit": "m2", "purchasePrice": 250.50, "colorOrDecor": "Bílá" }
 
-### Duplicitní kód (400)
+### Duplicitní kód: čekáme 400
 POST {{host}}/api/materials
 Content-Type: application/json
 
-{ "code": "M001", "name": "Jiný", "type": 2, "unit": "ks" }
+{ "code": "HM001", "name": "Jiný", "type": 2, "unit": "ks" }
 
-### Seznam s filtrem typu
+### Seznam podle typu a ceny
 GET {{host}}/api/materials?type=1&sortBy=price&desc=true
+
+### Hledání
+GET {{host}}/api/materials?search=lamino
+
+### Deaktivace
+PATCH {{host}}/api/materials/{{createMaterial.response.body.$.id}}/active
+Content-Type: application/json
+
+{ "isActive": false }
+
+###############################################################
+# OPERACE
+###############################################################
+
+### Záporná doba přípravy a chybějící název: čekáme 400
+POST {{host}}/api/operations
+Content-Type: application/json
+
+{ "code": "HO001", "defaultSetupMinutes": -1 }
+
+### Správně: čekáme 201
+# @name createOperation
+POST {{host}}/api/operations
+Content-Type: application/json
+
+{ "code": "HO001", "name": "Formátování", "workplace": "Formátovací pila", "defaultSetupMinutes": 10, "defaultRunMinutes": 5, "hourlyRate": 600 }
+
+### Duplicitní kód: čekáme 400
+POST {{host}}/api/operations
+Content-Type: application/json
+
+{ "code": "HO001", "name": "Jiná operace" }
+
+### Seznam podle pracoviště
+GET {{host}}/api/operations?workplace=Formátovací pila&sortBy=rate
+
+### Nabídka pracovišť
+GET {{host}}/api/operations/workplaces
+
+### Detail
+GET {{host}}/api/operations/{{createOperation.response.body.$.id}}
+
+### Deaktivace
+PATCH {{host}}/api/operations/{{createOperation.response.body.$.id}}/active
+Content-Type: application/json
+
+{ "isActive": false }

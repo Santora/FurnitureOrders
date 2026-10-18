@@ -1,0 +1,88 @@
+﻿@page "/operations/{Id:int}"
+@inject OperationApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Detail operace</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="operations" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_o is not null)
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudText Typo="Typo.h5">@_o.Name</MudText>
+            <ActiveChip IsActive="_o.IsActive" />
+        </MudStack>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Href="operations" Variant="Variant.Outlined">Zpět</MudButton>
+            <MudButton OnClick="ToggleActiveAsync" Variant="Variant.Outlined"
+                       Color="@(_o.IsActive ? Color.Warning : Color.Success)">
+                @(_o.IsActive ? "Deaktivovat" : "Aktivovat")
+            </MudButton>
+            <MudButton Href="@($"operations/{_o.Id}/edit")" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Edit">Upravit</MudButton>
+        </MudStack>
+    </MudStack>
+
+    <FormSection Title="Základní údaje">
+        <DetailField Label="Kód operace" Value="@_o.Code" />
+        <DetailField Label="Pracoviště" Value="@_o.Workplace" />
+        <DetailField Label="Typ operace" Value="@_o.OperationType" />
+        <DetailField Label="Požadovaná kvalifikace" Value="@_o.RequiredQualification" />
+    </FormSection>
+
+    <FormSection Title="Časy a sazba">
+        <DetailField Label="Výchozí doba přípravy (min)" Value="@_o.DefaultSetupMinutes?.ToString()" />
+        <DetailField Label="Výchozí doba výroby (min)" Value="@_o.DefaultRunMinutes?.ToString()" />
+        <DetailField Label="Hodinová sazba" Value="@_o.HourlyRate?.ToString("N2")" />
+    </FormSection>
+
+    <FormSection Title="Popis a poznámka">
+        <DetailField Label="Popis" Value="@_o.Description" />
+        <DetailField Label="Poznámka" Value="@_o.Note" />
+    </FormSection>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private OperationEditDto? _o;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await Api.GetAsync(Id);
+        _loading = false;
+
+        if (result.IsSuccess) _o = result.Value;
+        else
+        {
+            _o = null;
+            _error = result.Message ?? "Operaci se nepodařilo načíst.";
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        var result = await Api.SetActiveAsync(Id, !_o!.IsActive);
+        if (result.IsSuccess)
+        {
+            _o = result.Value;
+            Snackbar.Add("Stav operace byl změněn.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+}
