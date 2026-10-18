@@ -9,6 +9,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Material> Materials => Set<Material>();
     public DbSet<Operation> Operations => Set<Operation>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductMaterial> ProductMaterials => Set<ProductMaterial>();
+    public DbSet<ProductOperation> ProductOperations => Set<ProductOperation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

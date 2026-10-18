@@ -161,3 +161,129 @@ PATCH {{host}}/api/products/{{createProduct.response.body.$.id}}/active
 Content-Type: application/json
 
 { "isActive": false }
+
+
+###############################################################
+# TECHNOLOGICKÝ POSTUP VÝROBKU
+# Sekce je soběstačná: vytváří si vlastní data s náhodnými kódy.
+# Spouštěj shora dolů.
+###############################################################
+
+### Příprava: výrobek
+# @name rtProduct
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "code": "RP{{$randomInt}}", "name": "Postup test", "unit": "ks", "salesPrice": 1000 }
+
+### Příprava: materiál
+# @name rtMaterial
+POST {{host}}/api/materials
+Content-Type: application/json
+
+{ "code": "RM{{$randomInt}}", "name": "Postup materiál", "type": 1, "unit": "m2" }
+
+### Příprava: neaktivní materiál
+# @name rtMaterialInactive
+POST {{host}}/api/materials
+Content-Type: application/json
+
+{ "code": "RN{{$randomInt}}", "name": "Postup neaktivní", "type": 1, "unit": "ks", "isActive": false }
+
+### Příprava: operace 1
+# @name rtOperation1
+POST {{host}}/api/operations
+Content-Type: application/json
+
+{ "code": "RO{{$randomInt}}", "name": "Postup formátování", "workplace": "Formátovací pila" }
+
+### Příprava: operace 2
+# @name rtOperation2
+POST {{host}}/api/operations
+Content-Type: application/json
+
+{ "code": "RQ{{$randomInt}}", "name": "Postup olepování", "workplace": "Olepovačka" }
+
+### Materiál: neaktivní nelze přiřadit: čekáme 400
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials
+Content-Type: application/json
+
+{ "materialId": {{rtMaterialInactive.response.body.$.id}}, "quantity": 2 }
+
+### Materiál: chybí materiál, množství 0: čekáme 400
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials
+Content-Type: application/json
+
+{ "quantity": 0 }
+
+### Materiál: neexistující materiál: čekáme 400
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials
+Content-Type: application/json
+
+{ "materialId": 999999, "quantity": 1 }
+
+### Materiál: výrobek neexistuje: čekáme 404
+POST {{host}}/api/products/999999/materials
+Content-Type: application/json
+
+{ "materialId": {{rtMaterial.response.body.$.id}}, "quantity": 1 }
+
+### Materiál: správně, jednotka se převezme z materiálu (m2): čekáme 201
+# @name rtProductMaterial
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials
+Content-Type: application/json
+
+{ "materialId": {{rtMaterial.response.body.$.id}}, "quantity": 2.5, "wastePercent": 5 }
+
+### Materiál: úprava: čekáme 200
+PUT {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials/{{rtProductMaterial.response.body.$.id}}
+Content-Type: application/json
+
+{ "materialId": {{rtMaterial.response.body.$.id}}, "quantity": 3, "wastePercent": 10, "note": "Upraveno" }
+
+### Materiály výrobku: čekáme jeden řádek, množství 3
+GET {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials
+
+### Operace: chybí operace: čekáme 400
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations
+Content-Type: application/json
+
+{ "setupMinutes": 5 }
+
+### Operace 1: čekáme 201, pořadí 1
+# @name rtProductOperation1
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations
+Content-Type: application/json
+
+{ "operationId": {{rtOperation1.response.body.$.id}}, "setupMinutes": 10, "runMinutesPerUnit": 2.5, "workInstructions": "Nařezat dle výkresu" }
+
+### Operace 2: čekáme 201, pořadí 2
+# @name rtProductOperation2
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations
+Content-Type: application/json
+
+{ "operationId": {{rtOperation2.response.body.$.id}}, "setupMinutes": 5, "runMinutesPerUnit": 1 }
+
+### Operace: pořadí 1 = formátování, 2 = olepování
+GET {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations
+
+### Přesun operace 2 nahoru: čekáme 204
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations/{{rtProductOperation2.response.body.$.id}}/move
+Content-Type: application/json
+
+{ "direction": -1 }
+
+### Operace: pořadí se prohodilo (olepování je první)
+GET {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations
+
+### Neplatný směr: čekáme 400
+POST {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations/{{rtProductOperation2.response.body.$.id}}/move
+Content-Type: application/json
+
+{ "direction": 5 }
+
+### Odebrání operace: čekáme 204
+DELETE {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations/{{rtProductOperation1.response.body.$.id}}
+
+### Odebrání materiálu: čekáme 204
+DELETE {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials/{{rtProductMaterial.response.body.$.id}}

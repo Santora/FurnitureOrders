@@ -111,6 +111,7 @@ Zadání v některých místech nechává volbu na řešiteli. Přijatá rozhodn
 - **Číselníky:** typ materiálu a typ zákazníka jsou výčtové typy. Pracoviště a typ operace, skupina a typ výrobku jsou volný text (zadání uvádí jen příklady). Již použitá pracoviště a skupiny výrobků se nabízejí při zadávání a ve filtrech.
 - **Nepovinné číselné hodnoty:** nákupní cena, minimální objednací množství, doby operací, hodinová sazba, rozměry, hmotnost a doba dodání jsou nepovinné, ale pokud jsou vyplněny, nesmí být záporné. Prodejní cena výrobku je povinná a nezáporná.
 - **Společné prvky seznamů:** všechny evidence mají stejné ovládání (hledání podle kódu a názvu, filtr stavu, řazení kliknutím na záhlaví, doplňkový filtr podle typu nebo skupiny).
+- **Technologický postup: materiály a operace výrobku se odebírají fyzicky (jsou to podřízené řádky výrobku). Pořadí se při přidání doplní automaticky, změna pořadí operací probíhá akcí nahoru/dolů a server pořadí přečísluje. Neaktivní materiál nebo operaci nelze k výrobku nově přiřadit. Měrná jednotka materiálu výrobku se při prázdné hodnotě převezme z materiálu.
 - **UI** je česky, názvy v kódu anglicky.
 
 ## Stav a plán

@@ -17,6 +17,7 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IMaterialService, MaterialService>();
 builder.Services.AddScoped<IOperationService, OperationService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IProductRoutingService, ProductRoutingService>();
 
 
 
@@ -33,5 +34,6 @@ app.MapCustomerEndpoints();
 app.MapMaterialEndpoints();
 app.MapOperationEndpoints();
 app.MapProductEndpoints();
+app.MapProductRoutingEndpoints();
 
 app.Run();
