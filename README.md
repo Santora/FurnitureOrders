@@ -34,11 +34,7 @@ Porty se řídí soubory `Properties/launchSettings.json` v obou projektech.
 
 ## Vytvoření databáze
 
-Struktura databáze se vytváří pomocí EF Core migrací:
-
-```bash
-dotnet ef database update --project FurnitureOrders.Api
-```
+Při startu Api se migrace aplikují automaticky. Ručně: dotnet ef database update --project FurnitureOrders.Api
 
 ## Spuštění aplikace
 
@@ -51,7 +47,7 @@ dotnet run --project FurnitureOrders.Client --launch-profile https
 
 ## Testovací data
 
-*Zatím nejsou k dispozici.* Plánuje se idempotentní seed při startu API (opakované spuštění nevytváří duplicity).
+Testovací data se vytvářejí automaticky při startu Api (spolu s aplikací migrací). Obojí řídí Database:MigrateOnStartup a Database:SeedDemoData v appsettings.json (výchozí true, lze vypnout nebo přepsat proměnnou prostředí, např. Database__SeedDemoData=false). Seed je idempotentní: každý záznam se vloží, jen pokud jeho kód ještě neexistuje. Rozsah: 10 zákazníků (Z90001–Z90010), 15 materiálů, 10 operací, 10 výrobků, technologický postup u 5 výrobků, 10 zakázek ve všech stavech a 24 položek. Všechna data jsou smyšlená.
 
 ## Testování API
 
@@ -116,6 +112,9 @@ Zadání v některých místech nechává volbu na řešiteli. Přijatá rozhodn
 - **UI** je česky, názvy v kódu anglicky.
 - **Zakázky**: zakázka se ukládá včetně položek jedním požadavkem. Cenu položky (množství × cena × (1 − sleva/100), zaokrouhleno na 2 místa) i zakázky počítá server, klientem poslané ceny ignoruje. Pořadí položek určuje pořadí v odeslaném seznamu. Zakázka se nemaže, „deaktivací” je stav Zrušená. Číslo zakázky se generuje ze sekvence (ZAK-00001), lze ho zadat i ručně. Neaktivního zákazníka ani výrobek nelze do zakázky nově přidat, u existující zakázky zůstanou původní hodnoty platné. Termín dodání ani skutečné dokončení nesmí být před datem vytvoření.
 - **Zakázky v UI**: položky se edituji přímo v tabulce ve formuláři zakázky. Po výběru výrobku se předvyplní měrná jednotka a cena, po výběru zákazníka prázdný kontakt a dodací adresa (vše lze přepsat). Zobrazené ceny jsou jen náhled, závazný výpočet provádí server při uložení.
+- Demo kódy mají vlastní prefixy (Z9xxxx, MAT-, OP-, VYR-, ZAK-9xxxx), takže se nepletou s tím, co jsi zadal ručně, ani s generovanou řadou.
+- Výrobky jsou pojmenované pro AI scénáře ze zadání: Psací stůl Alfa, Skříňka Beta, dvojice Police Delta a Police Epsilon (nejednoznačné „police”) a žádná „Skříň Zeta” (neexistující výrobek).
+- Rozsah splňuje doporučení zadání: 10 zákazníků, 15 materiálů, 10 operací, 10 výrobků, postup u 5 výrobků, 10 zakázek a 24 položek.
 
 ## Stav a plán
 

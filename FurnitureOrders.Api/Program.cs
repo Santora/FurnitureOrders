@@ -25,6 +25,8 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 var app = builder.Build();
 
+await app.InitializeDatabaseAsync();
+
 if (app.Environment.IsDevelopment())
 {
     _ = app.MapOpenApi();
