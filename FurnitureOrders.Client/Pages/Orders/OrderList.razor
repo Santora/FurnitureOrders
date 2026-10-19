@@ -1,0 +1,132 @@
+﻿@page "/orders"
+@inject OrderApiClient Api
+@inject CustomerApiClient Customers
+
+<PageTitle>Zakázky</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-3">Přehled zakázek</MudText>
+
+<ListToolbar NewHref="orders/new" NewText="Nová zakázka">
+    <MudTextField T="string" Label="Číslo zakázky" Value="_search" ValueChanged="OnSearchChanged"
+                  DebounceInterval="300" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Clearable="true" Style="min-width:200px; max-width:240px" />
+    <MudSelect T="OrderStatus?" Label="Stav" Value="_status" ValueChanged="OnStatusChanged" Style="max-width:180px">
+        <MudSelectItem T="OrderStatus?" Value="@((OrderStatus?)null)">Všechny</MudSelectItem>
+        @foreach (var s in Enum.GetValues<OrderStatus>())
+        {
+            <MudSelectItem T="OrderStatus?" Value="@((OrderStatus?)s)">@Labels.Of(s)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudAutocomplete T="CustomerListItemDto" Label="Zákazník" Value="_customer" ValueChanged="OnCustomerChanged"
+                     SearchFunc="SearchCustomersAsync" ToStringFunc="@(c => c is null ? string.Empty : $"{c.CustomerNumber} – {c.Name}")"
+                     ResetValueOnEmptyText="true" Clearable="true" ShowProgressIndicator="false" Style="min-width:240px" />
+    <div style="width:170px"><DatePickerField Label="Vytvořeno od" Value="_from" ValueChanged="OnFromChanged" /></div>
+    <div style="width:170px"><DatePickerField Label="Vytvořeno do" Value="_to" ValueChanged="OnToChanged" /></div>
+</ListToolbar>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-2" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        @_error
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Zkusit znovu</MudButton>
+    </MudAlert>
+}
+else
+{
+    <MudPaper Style="overflow-x:auto">
+        <MudSimpleTable Hover="true" Dense="true">
+            <thead>
+                <tr>
+                    <th><SortableHeader Text="Číslo" Key="number" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Zákazník" Key="customer" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Vytvořeno" Key="created" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Požadovaný termín" Key="required" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th><SortableHeader Text="Stav" Key="status" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th style="text-align:right"><SortableHeader Text="Cena bez DPH" Key="total" CurrentKey="@_sortBy" Desc="_desc" OnSort="SortAsync" /></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in _items)
+                {
+                    <tr>
+                        <td>@o.OrderNumber</td>
+                        <td>@o.CustomerName</td>
+                        <td>@o.CreatedDate.ToString("dd.MM.yyyy")</td>
+                        <td>@o.RequiredDeliveryDate.ToString("dd.MM.yyyy")</td>
+                        <td><OrderStatusChip Status="o.Status" /></td>
+                        <td style="text-align:right">@o.TotalPrice.ToString("N2")</td>
+                        <td><RowActions DetailHref="@($"orders/{o.Id}")" EditHref="@($"orders/{o.Id}/edit")" ShowToggle="false" /></td>
+                    </tr>
+                }
+                @if (_items.Count == 0 && !_loading)
+                {
+                    <tr><td colspan="7" class="pa-4">Žádné zakázky neodpovídají filtru.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<OrderListItemDto> _items = [];
+    private string? _search;
+    private OrderStatus? _status;
+    private CustomerListItemDto? _customer;
+    private DateOnly? _from;
+    private DateOnly? _to;
+    private string _sortBy = "created";
+    private bool _desc = true;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await Api.ListAsync(new OrderQuery(_search, _status, _customer?.Id, _from, _to, _sortBy, _desc));
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Seznam zakázek se nepodařilo načíst. Server není dostupný.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<IEnumerable<CustomerListItemDto>> SearchCustomersAsync(string? text, CancellationToken ct)
+    {
+        try
+        {
+            return (await Customers.ListAsync(new CustomerQuery(text, null, "name", false), ct)).Take(20);
+        }
+        catch (HttpRequestException)
+        {
+            return [];
+        }
+    }
+
+    private Task OnSearchChanged(string? v) { _search = v; return LoadAsync(); }
+    private Task OnStatusChanged(OrderStatus? v) { _status = v; return LoadAsync(); }
+    private Task OnCustomerChanged(CustomerListItemDto? v) { _customer = v; return LoadAsync(); }
+    private Task OnFromChanged(DateOnly? v) { _from = v; return LoadAsync(); }
+    private Task OnToChanged(DateOnly? v) { _to = v; return LoadAsync(); }
+
+    private Task SortAsync(string key)
+    {
+        _desc = _sortBy == key && !_desc;
+        _sortBy = key;
+        return LoadAsync();
+    }
+}

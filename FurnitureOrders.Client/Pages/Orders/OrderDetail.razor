@@ -1,0 +1,140 @@
+﻿@page "/orders/{Id:int}"
+@inject OrderApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Detail zakázky</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="orders" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_o is not null)
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4" Wrap="Wrap.Wrap">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudText Typo="Typo.h5">Zakázka @_o.OrderNumber</MudText>
+            <OrderStatusChip Status="_o.Status" />
+        </MudStack>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Href="orders" Variant="Variant.Outlined">Zpět</MudButton>
+            <MudMenu Label="Změnit stav" Variant="Variant.Outlined" EndIcon="@Icons.Material.Filled.ArrowDropDown">
+                @foreach (var s in Enum.GetValues<OrderStatus>())
+                {
+                    var status = s;
+                    <MudMenuItem Disabled="@(status == _o.Status)" OnClick="@(() => SetStatusAsync(status))">@Labels.Of(status)</MudMenuItem>
+                }
+            </MudMenu>
+            <MudButton Href="@($"orders/{_o.Id}/edit")" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Edit">Upravit</MudButton>
+        </MudStack>
+    </MudStack>
+
+    <FormSection Title="Základní údaje">
+        <DetailField Label="Číslo zakázky" Value="@_o.OrderNumber" />
+        <DetailField Label="Zákazník" Value="@_o.CustomerName" />
+        <DetailField Label="Datum vytvoření" Value="@_o.CreatedDate?.ToString("dd.MM.yyyy")" />
+        <DetailField Label="Požadovaný termín dodání" Value="@_o.RequiredDeliveryDate?.ToString("dd.MM.yyyy")" />
+        <DetailField Label="Skutečný termín dokončení" Value="@_o.ActualCompletionDate?.ToString("dd.MM.yyyy")" />
+        <DetailField Label="Poslední změna" Value="@_o.LastModifiedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm")" />
+    </FormSection>
+
+    <FormSection Title="Kontakt a dodání">
+        <DetailField Label="Kontaktní osoba" Value="@_o.ContactPerson" />
+        <DetailField Label="E-mail" Value="@_o.Email" />
+        <DetailField Label="Telefon" Value="@_o.Phone" />
+        <DetailField Label="Způsob dopravy" Value="@_o.ShippingMethod" />
+        <DetailField Label="Dodací adresa" Value="@_o.DeliveryAddress" Md="12" />
+    </FormSection>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Položky zakázky</MudText>
+        <div style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Výrobek</th>
+                        <th>Popis</th>
+                        <th style="text-align:right">Množství</th>
+                        <th>MJ</th>
+                        <th style="text-align:right">Jedn. cena</th>
+                        <th style="text-align:right">Sleva %</th>
+                        <th style="text-align:right">Cena řádku</th>
+                        <th>Termín</th>
+                        <th>Poznámka</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in _o.Items)
+                    {
+                        <tr>
+                            <td>@i.Sequence</td>
+                            <td>@i.ProductCode – @i.ProductName</td>
+                            <td>@i.Description</td>
+                            <td style="text-align:right">@i.Quantity?.ToString("0.###")</td>
+                            <td>@i.Unit</td>
+                            <td style="text-align:right">@i.UnitPrice?.ToString("N2")</td>
+                            <td style="text-align:right">@i.DiscountPercent?.ToString("0.##")</td>
+                            <td style="text-align:right">@i.TotalPrice.ToString("N2")</td>
+                            <td>@i.RequiredDeliveryDate?.ToString("dd.MM.yyyy")</td>
+                            <td>@i.Note</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="7" style="text-align:right"><b>Celková cena bez DPH</b></td>
+                        <td style="text-align:right"><b>@_o.TotalPrice.ToString("N2")</b></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </MudSimpleTable>
+        </div>
+    </MudPaper>
+
+    <FormSection Title="Poznámka">
+        <DetailField Label="Poznámka" Value="@_o.Note" Md="12" />
+    </FormSection>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private OrderEditDto? _o;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        var result = await Api.GetAsync(Id);
+        _loading = false;
+
+        if (result.IsSuccess) _o = result.Value;
+        else
+        {
+            _o = null;
+            _error = result.Message ?? "Zakázku se nepodařilo načíst.";
+        }
+    }
+
+    private async Task SetStatusAsync(OrderStatus status)
+    {
+        var result = await Api.SetStatusAsync(Id, status);
+        if (result.IsSuccess)
+        {
+            _o = result.Value;
+            Snackbar.Add($"Stav zakázky: {Labels.Of(status)}.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Změnu stavu se nepodařilo uložit.", Severity.Error);
+        }
+    }
+}

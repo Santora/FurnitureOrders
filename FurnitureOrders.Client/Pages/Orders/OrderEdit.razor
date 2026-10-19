@@ -1,0 +1,368 @@
+﻿@page "/orders/new"
+@page "/orders/{Id:int}/edit"
+@inject OrderApiClient Api
+@inject CustomerApiClient Customers
+@inject ProductApiClient Products
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(IsNew ? "Nová zakázka" : "Úprava zakázky")</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">@(IsNew ? "Nová zakázka" : $"Úprava zakázky {_model?.OrderNumber}")</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    <MudButton Href="orders" Variant="Variant.Outlined">Zpět na seznam</MudButton>
+}
+else if (_model is not null && _ctx is not null && _server is not null)
+{
+    <EditForm EditContext="_ctx" OnSubmit="SubmitAsync">
+        <DataAnnotationsValidator />
+        <ErrorList Messages="_server.General" />
+
+        <FormSection Title="Základní údaje">
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_model.OrderNumber" For="@(() => _model.OrderNumber)"
+                              Label="Číslo zakázky"
+                              HelperText="@(IsNew ? "Prázdné pole = číslo se vygeneruje automaticky." : null)" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudAutocomplete T="CustomerListItemDto" Label="Zákazník *" Value="_customer"
+                                 ValueChanged="OnCustomerSelected" SearchFunc="SearchCustomersAsync"
+                                 ToStringFunc="@CustomerText" ResetValueOnEmptyText="true" Clearable="true"
+                                 ShowProgressIndicator="false" />
+                <div class="mud-typography mud-typography-caption mud-error-text">
+                    <ValidationMessage For="@(() => _model.CustomerId)" />
+                </div>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudSelect T="OrderStatus" @bind-Value="_model.Status" Label="Stav *">
+                    @foreach (var s in Enum.GetValues<OrderStatus>())
+                    {
+                        <MudSelectItem T="OrderStatus" Value="s">@Labels.Of(s)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <DatePickerField Label="Datum vytvoření *" @bind-Value="_model.CreatedDate" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <DatePickerField Label="Požadovaný termín dodání *" @bind-Value="_model.RequiredDeliveryDate" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <DatePickerField Label="Skutečný termín dokončení" @bind-Value="_model.ActualCompletionDate" />
+            </MudItem>
+        </FormSection>
+
+        <FormSection Title="Kontakt a dodání">
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.ContactPerson" For="@(() => _model.ContactPerson)" Label="Kontaktní osoba" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.Email" For="@(() => _model.Email)" Label="E-mail pro komunikaci" InputType="InputType.Email" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.Phone" For="@(() => _model.Phone)" Label="Telefon pro komunikaci" InputType="InputType.Telephone" />
+            </MudItem>
+            <MudItem xs="12" md="8">
+                <MudTextField @bind-Value="_model.DeliveryAddress" For="@(() => _model.DeliveryAddress)" Label="Dodací adresa" Lines="2" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.ShippingMethod" For="@(() => _model.ShippingMethod)" Label="Způsob dopravy" />
+            </MudItem>
+        </FormSection>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudText Typo="Typo.h6">Položky zakázky</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="AddItem">Přidat položku</MudButton>
+            </MudStack>
+
+            <div class="mud-typography mud-typography-body2 mud-error-text mb-2">
+                <ValidationMessage For="@(() => _model.Items)" />
+            </div>
+
+            <div style="overflow-x:auto">
+                <MudSimpleTable Dense="true">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th style="min-width:260px">Výrobek *</th>
+                            <th style="min-width:160px">Popis</th>
+                            <th style="min-width:100px">Množství *</th>
+                            <th style="min-width:70px">MJ</th>
+                            <th style="min-width:120px">Jedn. cena *</th>
+                            <th style="min-width:90px">Sleva %</th>
+                            <th style="min-width:120px; text-align:right">Cena řádku</th>
+                            <th style="min-width:170px">Termín</th>
+                            <th style="min-width:160px">Poznámka</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < _model.Items.Count; i++)
+                        {
+                            var item = _model.Items[i];
+                            var index = i;
+                            <tr>
+                                <td>@(index + 1)</td>
+                                <td>
+                                    <MudAutocomplete T="ProductListItemDto" Value="@ProductOf(item)"
+                                                     ValueChanged="@((ProductListItemDto? p) => OnProductSelected(item, p))"
+                                                     SearchFunc="SearchProductsAsync" ToStringFunc="@ProductText"
+                                                     ResetValueOnEmptyText="true" Clearable="true"
+                                                     ShowProgressIndicator="false" Margin="Margin.Dense" />
+                                    <div class="mud-typography mud-typography-caption mud-error-text">
+                                        <ValidationMessage For="@(() => item.ProductId)" />
+                                    </div>
+                                </td>
+                                <td><MudTextField @bind-Value="item.Description" For="@(() => item.Description)" Margin="Margin.Dense" /></td>
+                                <td><MudNumericField T="decimal?" @bind-Value="item.Quantity" For="@(() => item.Quantity)" Margin="Margin.Dense" HideSpinButtons="true" /></td>
+                                <td><MudTextField @bind-Value="item.Unit" For="@(() => item.Unit)" Margin="Margin.Dense" /></td>
+                                <td><MudNumericField T="decimal?" @bind-Value="item.UnitPrice" For="@(() => item.UnitPrice)" Margin="Margin.Dense" HideSpinButtons="true" /></td>
+                                <td><MudNumericField T="decimal?" @bind-Value="item.DiscountPercent" For="@(() => item.DiscountPercent)" Margin="Margin.Dense" HideSpinButtons="true" /></td>
+                                <td style="text-align:right">@LineTotal(item).ToString("N2")</td>
+                                <td><DatePickerField Dense="true" @bind-Value="item.RequiredDeliveryDate" /></td>
+                                <td><MudTextField @bind-Value="item.Note" For="@(() => item.Note)" Margin="Margin.Dense" /></td>
+                                <td style="white-space:nowrap">
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" title="Nahoru"
+                                                   Disabled="@(index == 0)" OnClick="@(() => MoveItem(index, -1))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" title="Dolů"
+                                                   Disabled="@(index == _model.Items.Count - 1)" OnClick="@(() => MoveItem(index, 1))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" title="Odebrat"
+                                                   OnClick="@(() => RemoveItem(index))" />
+                                </td>
+                            </tr>
+                        }
+                        @if (_model.Items.Count == 0)
+                        {
+                            <tr><td colspan="11" class="pa-4">Zakázka zatím nemá žádné položky.</td></tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="7" style="text-align:right"><b>Celková cena bez DPH</b></td>
+                            <td style="text-align:right"><b>@OrderTotal().ToString("N2")</b></td>
+                            <td colspan="3"></td>
+                        </tr>
+                    </tfoot>
+                </MudSimpleTable>
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                Ceny se při uložení přepočítají na serveru.
+            </MudText>
+        </MudPaper>
+
+        <FormSection Title="Poznámka">
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_model.Note" For="@(() => _model.Note)" Label="Poznámka" Lines="4" />
+            </MudItem>
+        </FormSection>
+
+        <FormActions Saving="_saving" CancelHref="@(IsNew ? "orders" : $"orders/{Id}")" />
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private bool IsNew => Id is null;
+    private OrderEditDto? _model;
+    private EditContext? _ctx;
+    private ServerValidation? _server;
+    private CustomerListItemDto? _customer;
+    private readonly Dictionary<OrderItemEditDto, ProductListItemDto?> _products = [];
+    private bool _loading;
+    private bool _saving;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+        _products.Clear();
+        _customer = null;
+
+        if (IsNew)
+        {
+            var model = new OrderEditDto { CreatedDate = DateOnly.FromDateTime(DateTime.Today) };
+            model.Items.Add(new OrderItemEditDto());
+            Init(model);
+            return;
+        }
+
+        _loading = true;
+        var result = await Api.GetAsync(Id!.Value);
+        _loading = false;
+
+        if (result.IsSuccess)
+        {
+            var model = result.Value!;
+            _customer = new CustomerListItemDto(model.CustomerId ?? 0, "", CustomerType.Company,
+                model.CustomerName ?? "", null, null, null, null, true);
+
+            foreach (var item in model.Items)
+                _products[item] = new ProductListItemDto(item.ProductId ?? 0, item.ProductCode ?? "",
+                    item.ProductName ?? "", null, null, item.Unit ?? "", item.UnitPrice ?? 0, null, true);
+
+            Init(model);
+        }
+        else
+        {
+            _model = null;
+            _error = result.Message ?? "Zakázku se nepodařilo načíst.";
+        }
+    }
+
+    private void Init(OrderEditDto model)
+    {
+        _model = model;
+        _ctx = new EditContext(model);
+        _server = new ServerValidation(_ctx);
+    }
+
+    // ---------------------------------------------------------------- zákazník
+
+    private static string CustomerText(CustomerListItemDto? c) =>
+        c is null ? string.Empty
+        : string.IsNullOrEmpty(c.CustomerNumber) ? c.Name : $"{c.CustomerNumber} – {c.Name}";
+
+    private async Task<IEnumerable<CustomerListItemDto>> SearchCustomersAsync(string? text, CancellationToken ct)
+    {
+        try
+        {
+            return (await Customers.ListAsync(new CustomerQuery(text, true, "name", false), ct)).Take(20);
+        }
+        catch (HttpRequestException)
+        {
+            return [];
+        }
+    }
+
+    private async Task OnCustomerSelected(CustomerListItemDto? customer)
+    {
+        _customer = customer;
+        _model!.CustomerId = customer?.Id;
+        _ctx!.NotifyFieldChanged(_ctx.Field(nameof(OrderEditDto.CustomerId)));
+
+        if (customer is null) return;
+
+        // prázdná pole kontaktu a adresy se předvyplní z karty zákazníka
+        var detail = await Customers.GetAsync(customer.Id);
+        if (!detail.IsSuccess) return;
+
+        var c = detail.Value!;
+        _model.ContactPerson ??= c.ContactPerson;
+        _model.Email ??= c.Email;
+        _model.Phone ??= c.Phone;
+
+        if (string.IsNullOrWhiteSpace(_model.DeliveryAddress))
+        {
+            var parts = new[] { c.Street, $"{c.PostalCode} {c.City}".Trim(), c.Country }
+                .Where(p => !string.IsNullOrWhiteSpace(p));
+            var address = string.Join(", ", parts);
+            _model.DeliveryAddress = address.Length == 0 ? null : address;
+        }
+    }
+
+    // ----------------------------------------------------------------- položky
+
+    private static string ProductText(ProductListItemDto? p) =>
+        p is null ? string.Empty : $"{p.Code} – {p.Name}";
+
+    private ProductListItemDto? ProductOf(OrderItemEditDto item) =>
+        _products.GetValueOrDefault(item);
+
+    private async Task<IEnumerable<ProductListItemDto>> SearchProductsAsync(string? text, CancellationToken ct)
+    {
+        try
+        {
+            return (await Products.ListAsync(new ProductQuery(text, true, null, "name", false), ct)).Take(20);
+        }
+        catch (HttpRequestException)
+        {
+            return [];
+        }
+    }
+
+    private void OnProductSelected(OrderItemEditDto item, ProductListItemDto? product)
+    {
+        var previous = ProductOf(item);
+        _products[item] = product;
+        item.ProductId = product?.Id;
+
+        if (product is not null)
+        {
+            // výchozí hodnoty z evidence výrobků, uživatel je může přepsat
+            if (string.IsNullOrWhiteSpace(item.Unit) || item.Unit == previous?.Unit) item.Unit = product.Unit;
+            item.UnitPrice = product.SalesPrice;
+        }
+
+        _ctx!.NotifyFieldChanged(new FieldIdentifier(item, nameof(OrderItemEditDto.ProductId)));
+    }
+
+    private void AddItem() => _model!.Items.Add(new OrderItemEditDto());
+
+    private void RemoveItem(int index)
+    {
+        _products.Remove(_model!.Items[index]);
+        _model.Items.RemoveAt(index);
+    }
+
+    private void MoveItem(int index, int direction)
+    {
+        var target = index + direction;
+        if (target < 0 || target >= _model!.Items.Count) return;
+        (_model.Items[index], _model.Items[target]) = (_model.Items[target], _model.Items[index]);
+    }
+
+    private static decimal LineTotal(OrderItemEditDto i) =>
+        OrderPricing.ItemTotal(i.Quantity ?? 0, i.UnitPrice ?? 0, i.DiscountPercent ?? 0);
+
+    private decimal OrderTotal() => OrderPricing.OrderTotal(_model!.Items.Select(LineTotal));
+
+    // ------------------------------------------------------------------ uložení
+
+    private async Task SubmitAsync()
+    {
+        var valid = _ctx!.Validate();   // vyčistí předchozí chyby a ověří hlavičku zakázky
+
+        var itemErrors = ServerValidation.ValidateItems("Items", _model!.Items);
+        if (_model.Items.Count == 0)
+            itemErrors["Items"] = ["Zakázka musí obsahovat alespoň jednu položku."];
+
+        if (itemErrors.Count > 0)
+        {
+            _server!.Apply(itemErrors);
+            valid = false;
+        }
+
+        if (valid) await SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        var result = IsNew
+            ? await Api.CreateAsync(_model!)
+            : await Api.UpdateAsync(Id!.Value, _model!);
+
+        _saving = false;
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add("Zakázka byla uložena.", Severity.Success);
+            Nav.NavigateTo($"orders/{result.Value!.Id}");
+            return;
+        }
+
+        if (result.Errors.Count > 0) _server!.Apply(result.Errors);
+        else _server!.General.Add(result.Message ?? "Uložení se nepodařilo.");
+    }
+}

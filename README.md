@@ -59,7 +59,8 @@ Soubor `FurnitureOrders.Api/FurnitureOrders.Api.http` obsahuje ruční testovac�
 
 ## Automatizované testy
 
-*Zatím nejsou k dispozici.* Projekt `FurnitureOrders.Tests` (xUnit) je připraven. Spuštění: `dotnet test`.
+Projekt `FurnitureOrders.Tests` (xUnit) je připraven. Spuštění: `dotnet test`.
+Automatizované testy pokrývají výpočet cen (OrderPricingTests).
 
 ## Architektura
 
@@ -80,7 +81,7 @@ Solution má čtyři projekty:
 
 ## Použité knihovny třetích stran
 
-### MudBlazor (MIT)
+### MudBlazor 9.x (MIT)
 
 Komponentová knihovna pro uživatelské rozhraní (formuláře, tabulky, dialogy, layout).
 
@@ -111,8 +112,10 @@ Zadání v některých místech nechává volbu na řešiteli. Přijatá rozhodn
 - **Číselníky:** typ materiálu a typ zákazníka jsou výčtové typy. Pracoviště a typ operace, skupina a typ výrobku jsou volný text (zadání uvádí jen příklady). Již použitá pracoviště a skupiny výrobků se nabízejí při zadávání a ve filtrech.
 - **Nepovinné číselné hodnoty:** nákupní cena, minimální objednací množství, doby operací, hodinová sazba, rozměry, hmotnost a doba dodání jsou nepovinné, ale pokud jsou vyplněny, nesmí být záporné. Prodejní cena výrobku je povinná a nezáporná.
 - **Společné prvky seznamů:** všechny evidence mají stejné ovládání (hledání podle kódu a názvu, filtr stavu, řazení kliknutím na záhlaví, doplňkový filtr podle typu nebo skupiny).
-- **Technologický postup: materiály a operace výrobku se odebírají fyzicky (jsou to podřízené řádky výrobku). Pořadí se při přidání doplní automaticky, změna pořadí operací probíhá akcí nahoru/dolů a server pořadí přečísluje. Neaktivní materiál nebo operaci nelze k výrobku nově přiřadit. Měrná jednotka materiálu výrobku se při prázdné hodnotě převezme z materiálu.
+- **Technologický postup**: materiály a operace výrobku se odebírají fyzicky (jsou to podřízené řádky výrobku). Pořadí se při přidání doplní automaticky, změna pořadí operací probíhá akcí nahoru/dolů a server pořadí přečísluje. Neaktivní materiál nebo operaci nelze k výrobku nově přiřadit. Měrná jednotka materiálu výrobku se při prázdné hodnotě převezme z materiálu. Po výběru operace se v dialogu předvyplní pracoviště a časy z evidence operací.
 - **UI** je česky, názvy v kódu anglicky.
+- **Zakázky**: zakázka se ukládá včetně položek jedním požadavkem. Cenu položky (množství × cena × (1 − sleva/100), zaokrouhleno na 2 místa) i zakázky počítá server, klientem poslané ceny ignoruje. Pořadí položek určuje pořadí v odeslaném seznamu. Zakázka se nemaže, „deaktivací” je stav Zrušená. Číslo zakázky se generuje ze sekvence (ZAK-00001), lze ho zadat i ručně. Neaktivního zákazníka ani výrobek nelze do zakázky nově přidat, u existující zakázky zůstanou původní hodnoty platné. Termín dodání ani skutečné dokončení nesmí být před datem vytvoření.
+- **Zakázky v UI**: položky se edituji přímo v tabulce ve formuláři zakázky. Po výběru výrobku se předvyplní měrná jednotka a cena, po výběru zákazníka prázdný kontakt a dodací adresa (vše lze přepsat). Zobrazené ceny jsou jen náhled, závazný výpočet provádí server při uložení.
 
 ## Stav a plán
 
@@ -121,8 +124,8 @@ Zadání v některých místech nechává volbu na řešiteli. Přijatá rozhodn
 | Zákazníci (seznam, filtr, řazení, detail, formulář, deaktivace) | hotovo |
 | Navigace | hotovo |
 | Materiály, operace, výrobky (základní evidence) | hotovo |
-| Technologický postup výrobku (vnořené seznamy, pořadí operací) | plánováno |
-| Zakázky a položky, výpočet cen na serveru | plánováno |
+| Technologický postup výrobku (vnořené seznamy, pořadí operací) | hotovo |
+| Zakázky a položky, výpočet cen na serveru | hotovo 
 | Testovací data (seed) | plánováno |
 | AI asistent pro přípravu zakázky z poptávky | plánováno |
 | Automatizované testy | plánováno |

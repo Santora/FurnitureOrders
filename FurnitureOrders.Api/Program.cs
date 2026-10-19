@@ -18,6 +18,8 @@ builder.Services.AddScoped<IMaterialService, MaterialService>();
 builder.Services.AddScoped<IOperationService, OperationService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IProductRoutingService, ProductRoutingService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IOrderService, OrderService>();
 
 
 
@@ -35,5 +37,6 @@ app.MapMaterialEndpoints();
 app.MapOperationEndpoints();
 app.MapProductEndpoints();
 app.MapProductRoutingEndpoints();
+app.MapOrderEndpoints();
 
 app.Run();

@@ -26,4 +26,17 @@ public static class Labels
             _ => t.ToString()
         };
     }
+
+    public static string Of(OrderStatus s)
+    {
+        return s switch
+        {
+            OrderStatus.New => "Nová",
+            OrderStatus.Confirmed => "Potvrzená",
+            OrderStatus.InProduction => "Ve výrobě",
+            OrderStatus.Completed => "Dokončená",
+            OrderStatus.Cancelled => "Zrušená",
+            _ => s.ToString()
+        };
+    }
 }

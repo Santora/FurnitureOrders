@@ -287,3 +287,124 @@ DELETE {{host}}/api/products/{{rtProduct.response.body.$.id}}/operations/{{rtPro
 
 ### Odebrání materiálu: čekáme 204
 DELETE {{host}}/api/products/{{rtProduct.response.body.$.id}}/materials/{{rtProductMaterial.response.body.$.id}}
+
+###############################################################
+# ZAKÁZKY
+# Sekce je soběstačná, spouštěj shora dolů.
+###############################################################
+
+### Příprava: zákazník
+# @name orCustomer
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{ "name": "Zakázkový zákazník", "type": 1 }
+
+### Příprava: výrobek 1 (cena 1000)
+# @name orProduct1
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "code": "OP{{$randomInt}}", "name": "Zakázka výrobek 1", "unit": "ks", "salesPrice": 1000 }
+
+### Příprava: výrobek 2 (cena 450.50)
+# @name orProduct2
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "code": "OQ{{$randomInt}}", "name": "Zakázka výrobek 2", "unit": "ks", "salesPrice": 450.50 }
+
+### Příprava: neaktivní výrobek
+# @name orProductInactive
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "code": "OR{{$randomInt}}", "name": "Zakázka neaktivní", "unit": "ks", "salesPrice": 10, "isActive": false }
+
+### Bez položek: čekáme 400 (Items)
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{ "customerId": {{orCustomer.response.body.$.id}}, "createdDate": "2026-10-19", "requiredDeliveryDate": "2026-11-30", "status": 1, "items": [] }
+
+### Chybí zákazník a termín, množství 0, sleva 150: čekáme 400 s chybami u položky
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{ "createdDate": "2026-10-19", "status": 1,
+  "items": [ { "productId": {{orProduct1.response.body.$.id}}, "quantity": 0, "unitPrice": 1000, "discountPercent": 150 } ] }
+
+### Termín před datem vytvoření: čekáme 400
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{ "customerId": {{orCustomer.response.body.$.id}}, "createdDate": "2026-10-19", "requiredDeliveryDate": "2026-10-01", "status": 1,
+  "items": [ { "productId": {{orProduct1.response.body.$.id}}, "quantity": 1, "unitPrice": 1000 } ] }
+
+### Neaktivní výrobek: čekáme 400
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{ "customerId": {{orCustomer.response.body.$.id}}, "createdDate": "2026-10-19", "requiredDeliveryDate": "2026-11-30", "status": 1,
+  "items": [ { "productId": {{orProductInactive.response.body.$.id}}, "quantity": 1, "unitPrice": 10 } ] }
+
+### Správně: čekáme 201, číslo ZAK-xxxxx, položky 2700.00 a 901.00, celkem 3601.00
+# @name orOrder
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{ "customerId": {{orCustomer.response.body.$.id}}, "createdDate": "2026-10-19", "requiredDeliveryDate": "2026-11-30",
+  "status": 1, "deliveryAddress": "Dlouhá 15, Brno", "note": "Před doručením zavolat",
+  "totalPrice": 1,
+  "items": [
+    { "productId": {{orProduct1.response.body.$.id}}, "quantity": 3, "unitPrice": 1000, "discountPercent": 10, "totalPrice": 1 },
+    { "productId": {{orProduct2.response.body.$.id}}, "quantity": 2, "unitPrice": 450.50 }
+  ] }
+
+### Detail: totalPrice musí být 3601, ne 1 (klientská hodnota se ignoruje)
+GET {{host}}/api/orders/{{orOrder.response.body.$.id}}
+
+### Duplicitní číslo zakázky: čekáme 400
+POST {{host}}/api/orders
+Content-Type: application/json
+
+{ "orderNumber": "{{orOrder.response.body.$.orderNumber}}", "customerId": {{orCustomer.response.body.$.id}},
+  "createdDate": "2026-10-19", "requiredDeliveryDate": "2026-11-30", "status": 1,
+  "items": [ { "productId": {{orProduct1.response.body.$.id}}, "quantity": 1, "unitPrice": 1000 } ] }
+
+### Úprava: druhá položka pryč, první množství 4 bez slevy: čekáme 200, celkem 4000.00
+PUT {{host}}/api/orders/{{orOrder.response.body.$.id}}
+Content-Type: application/json
+
+{ "orderNumber": "{{orOrder.response.body.$.orderNumber}}", "customerId": {{orCustomer.response.body.$.id}},
+  "createdDate": "2026-10-19", "requiredDeliveryDate": "2026-11-30", "status": 2,
+  "items": [ { "id": {{orOrder.response.body.$.items[0].id}}, "productId": {{orProduct1.response.body.$.id}}, "quantity": 4, "unitPrice": 1000, "discountPercent": 0 } ] }
+
+### Cizí id položky: čekáme 400
+PUT {{host}}/api/orders/{{orOrder.response.body.$.id}}
+Content-Type: application/json
+
+{ "orderNumber": "{{orOrder.response.body.$.orderNumber}}", "customerId": {{orCustomer.response.body.$.id}},
+  "createdDate": "2026-10-19", "requiredDeliveryDate": "2026-11-30", "status": 2,
+  "items": [ { "id": 999999, "productId": {{orProduct1.response.body.$.id}}, "quantity": 1, "unitPrice": 1000 } ] }
+
+### Změna stavu na Zrušená: čekáme 200
+PATCH {{host}}/api/orders/{{orOrder.response.body.$.id}}/status
+Content-Type: application/json
+
+{ "status": 5 }
+
+### Neplatný stav: čekáme 400
+PATCH {{host}}/api/orders/{{orOrder.response.body.$.id}}/status
+Content-Type: application/json
+
+{ "status": 99 }
+
+### Seznam: filtr stavu, zákazníka a období, řazení podle ceny
+GET {{host}}/api/orders?status=5&customerId={{orCustomer.response.body.$.id}}&from=2026-10-01&to=2026-12-31&sortBy=total&desc=true
+
+### Seznam: hledání podle čísla
+GET {{host}}/api/orders?search=ZAK
+
+### Neexistující zakázka: čekáme 404
+GET {{host}}/api/orders/999999

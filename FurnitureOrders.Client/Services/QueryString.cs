@@ -20,6 +20,8 @@ public static class QueryString
         {
             bool b => b ? "true" : "false",
             string s => s.Trim(),
+            DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
             _ => v.ToString() ?? ""
         };

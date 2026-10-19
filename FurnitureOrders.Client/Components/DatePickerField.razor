@@ -1,0 +1,30 @@
+﻿<MudDatePicker Label="@Label" Date="@ToDateTime(Value)" DateChanged="OnDateChanged"
+               DateFormat="dd.MM.yyyy" Editable="true" Clearable="true"
+               Margin="@(Dense ? Margin.Dense : Margin.None)" />
+@if (Ctx is not null && ValueExpression is not null)
+{
+    <div class="mud-typography mud-typography-caption mud-error-text">
+        <ValidationMessage For="ValueExpression" />
+    </div>
+}
+
+@code {
+    [CascadingParameter] private EditContext? Ctx { get; set; }
+
+    [Parameter] public DateOnly? Value { get; set; }
+    [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
+    [Parameter] public System.Linq.Expressions.Expression<Func<DateOnly?>>? ValueExpression { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool Dense { get; set; }
+
+    private static DateTime? ToDateTime(DateOnly? d) => d?.ToDateTime(TimeOnly.MinValue);
+
+    private async Task OnDateChanged(DateTime? date)
+    {
+        var value = date is null ? (DateOnly?)null : DateOnly.FromDateTime(date.Value);
+        await ValueChanged.InvokeAsync(value);
+
+        if (Ctx is not null && ValueExpression is not null)
+            Ctx.NotifyFieldChanged(FieldIdentifier.Create(ValueExpression));
+    }
+}
