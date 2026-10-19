@@ -119,7 +119,7 @@ Balíček `System.Security.Cryptography.Pkcs` je v projektu `FurnitureOrders.Api
 
 ## AI asistent pro přípravu zakázky z poptávky
 
-*Stav: serverová část implementována, klientská část (obrazovka „Zakázka z poptávky“) rozpracována. Sekce se před odevzdáním doplní o výsledky ověření scénářů.*
+*Stav: server i klient implementovány.*
 
 **Poskytovatel a model:** Anthropic Claude přes Messages API. Model je konfigurovatelný (`Ai:Anthropic:Model`, výchozí `claude-haiku-5-5`).
 
@@ -157,6 +157,7 @@ Zadání v některých místech nechává volbu na řešiteli. Přijatá rozhodn
 - **Zakázky:** zakázka se ukládá včetně položek jedním požadavkem. Cenu položky (`množství × cena × (1 − sleva/100)`, zaokrouhleno na 2 místa) i zakázky (součet cen položek) počítá server a klientem poslané ceny ignoruje. Pořadí položek určuje pořadí v odeslaném seznamu. Zakázka se nemaže, „deaktivací“ je stav *Zrušená*. Číslo zakázky se generuje ze sekvence (`ZAK-00001`), lze ho zadat i ručně. Neaktivního zákazníka ani výrobek nelze do zakázky nově přidat, u existující zakázky zůstanou původní hodnoty platné. Termín dodání ani skutečné dokončení nesmí být před datem vytvoření.
 - **Zakázky v UI:** položky se editují přímo v tabulce ve formuláři zakázky. Po výběru výrobku se předvyplní měrná jednotka a cena, po výběru zákazníka prázdný kontakt a dodací adresa (vše lze přepsat). Zobrazené ceny jsou jen náhled, závazný výpočet provádí server při uložení.
 - **Jazyk:** uživatelské rozhraní je česky, názvy v kódu anglicky.
+- Návrh z AI se do formuláře zakázky předává v paměti prohlížeče (OrderDraftHandoff), po obnovení stránky se ztratí.
 
 ## Stav a plán
 

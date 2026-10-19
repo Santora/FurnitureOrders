@@ -20,6 +20,7 @@ builder.Services.AddScoped<OperationApiClient>();
 builder.Services.AddScoped<ProductApiClient>();
 builder.Services.AddScoped<ProductRoutingApiClient>();
 builder.Services.AddScoped<OrderApiClient>();
+builder.Services.AddScoped<OrderDraftHandoff>();
 
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("cs-CZ");
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("cs-CZ");

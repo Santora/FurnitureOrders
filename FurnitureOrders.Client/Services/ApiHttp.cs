@@ -1,6 +1,8 @@
-﻿using System.Net;
+﻿using FurnitureOrders.Shared.Orders;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+
 
 namespace FurnitureOrders.Client.Services;
 
@@ -55,6 +57,20 @@ public static class ApiHttp
             return problem?.Errors is { Count: > 0 } errors
                 ? new ApiResult<T> { Errors = errors }
                 : new ApiResult<T> { Message = "Neplatný požadavek." };
+        }
+
+        if (resp.StatusCode is HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout)
+        {
+            try
+            {
+                var ai = await resp.Content.ReadFromJsonAsync<AiErrorDto>();
+                if (!string.IsNullOrWhiteSpace(ai?.Message))
+                    return new ApiResult<T> { Message = ai.Message };
+            }
+            catch (JsonException)
+            {
+                // tělo není ve tvaru AiErrorDto: použije se obecná zpráva níže
+            }
         }
 
         return new ApiResult<T>

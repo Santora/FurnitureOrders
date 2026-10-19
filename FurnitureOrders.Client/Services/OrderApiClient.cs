@@ -23,4 +23,20 @@ public class OrderApiClient(HttpClient http)
         return ApiHttp.SendAsync<OrderEditDto>(() =>
             _http.PatchAsJsonAsync($"api/orders/{id}/status", new SetOrderStatusRequest(status)));
     }
+    public async Task<AiStatusDto?> GetAiStatusAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<AiStatusDto>("api/orders/ai-status");
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    public Task<ApiResult<OrderDraftDto>> CreateDraftAsync(OrderDraftRequest request, CancellationToken ct = default)
+    {
+        return ApiHttp.SendAsync<OrderDraftDto>(() => _http.PostAsJsonAsync("api/orders/ai-draft", request, ct));
+    }
 }

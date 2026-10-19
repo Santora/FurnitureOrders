@@ -5,6 +5,7 @@
 @inject ProductApiClient Products
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject OrderDraftHandoff Handoff
 
 <PageTitle>@(IsNew ? "Nová zakázka" : "Úprava zakázky")</PageTitle>
 
@@ -23,6 +24,13 @@ else if (_model is not null && _ctx is not null && _server is not null)
 {
     <EditForm EditContext="_ctx" OnSubmit="SubmitAsync">
         <DataAnnotationsValidator />
+        @if (_fromAi)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                Zakázka je předvyplněná z poptávky pomocí AI. Zkontrolujte všechny údaje a doplňte chybějící,
+                zakázka se uloží až po stisku Uložit.
+            </MudAlert>
+        }
         <ErrorList Messages="_server.General" />
 
         <FormSection Title="Základní údaje">
@@ -181,6 +189,7 @@ else if (_model is not null && _ctx is not null && _server is not null)
     private bool _loading;
     private bool _saving;
     private string? _error;
+    private bool _fromAi;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -190,6 +199,19 @@ else if (_model is not null && _ctx is not null && _server is not null)
 
         if (IsNew)
         {
+            var handoff = Handoff.Take();
+            if (handoff is not null)
+            {
+                _customer = handoff.Customer;
+                foreach (var (item, product) in handoff.Products)
+                    _products[item] = product;
+
+                _fromAi = true;
+                Init(handoff.Model);
+                return;
+            }
+
+            _fromAi = false;
             var model = new OrderEditDto { CreatedDate = DateOnly.FromDateTime(DateTime.Today) };
             model.Items.Add(new OrderItemEditDto());
             Init(model);
