@@ -10,10 +10,12 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var apiBase = builder.Configuration["ApiBaseUrl"]
-    ?? throw new InvalidOperationException("Chybí konfigurace ApiBaseUrl.");
+var apiBase = builder.Configuration["ApiBaseUrl"];
+var apiAddress = string.IsNullOrWhiteSpace(apiBase)
+    ? new Uri(builder.HostEnvironment.BaseAddress)
+    : new Uri(apiBase);
 
-builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBase) });
+builder.Services.AddScoped(_ => new HttpClient { BaseAddress = apiAddress });
 builder.Services.AddMudServices();
 builder.Services.AddScoped<CustomerApiClient>();
 builder.Services.AddScoped<MaterialApiClient>();

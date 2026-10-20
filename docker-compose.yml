@@ -1,30 +1,38 @@
 services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: furniture_db
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourStrong@Password123!
-      - MSSQL_PID=Express
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-YourStrong@Passw0rd}   # výchozí heslo jen pro vývoj
+      MSSQL_PID: Express
     ports:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
-    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: furniture_full_app
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Server=db;Database=FurnitureOrdersDb;User Id=sa;Password=YourStrong@Password123!;TrustServerCertificate=true;
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Server=db;Database=FurnitureOrders;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourStrong@Passw0rd};TrustServerCertificate=True
+      Database__SeedDemoData: ${SEED_DEMO_DATA:-true}
+      Ai__Provider: ${AI_PROVIDER:-Anthropic}        # Anthropic | Fake | None
+      Ai__Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}  # bez klíče AI hlásí, že není nakonfigurována
     ports:
       - "8080:80"
     depends_on:
-      - db
-    restart: always
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   mssql_data:
