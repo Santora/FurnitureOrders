@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: furniture_db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Password123!
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    restart: always
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: furniture_full_app
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=db;Database=FurnitureOrdersDb;User Id=sa;Password=YourStrong@Password123!;TrustServerCertificate=true;
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    restart: always
+
+volumes:
+  mssql_data:
