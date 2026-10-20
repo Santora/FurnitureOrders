@@ -1,0 +1,39 @@
+name: .NET CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build solution
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Run unit tests
+      run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+
+  # Sekce pro budoucí deployment (např. Docker / VPS)
+  # deploy:
+  #   needs: build-and-test
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Deploy to production server
+  #     run: echo "Sem přijde skript pro deploy (např. SSH na VPS nebo Docker push)"
