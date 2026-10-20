@@ -1,0 +1,11 @@
+﻿@page "/grid/customers"
+@inject CustomerApiClient Api
+
+<PageTitle>Zákazníci (dynamický grid)</PageTitle>
+
+<DynamicGrid TItem="CustomerListItemDto" ConfigName="customers" LoadItems="LoadAsync" />
+
+@code {
+    private async Task<IReadOnlyList<CustomerListItemDto>> LoadAsync(CancellationToken ct) =>
+        await Api.ListAsync(new CustomerQuery(null, null, "number", false), ct);
+}

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
 using System.Globalization;
+using FurnitureOrders.Client.Grid;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -21,6 +22,8 @@ builder.Services.AddScoped<ProductApiClient>();
 builder.Services.AddScoped<ProductRoutingApiClient>();
 builder.Services.AddScoped<OrderApiClient>();
 builder.Services.AddScoped<OrderDraftHandoff>();
+builder.Services.AddScoped(_ => new GridConfigLoader(new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) }));
+builder.Services.AddScoped<GridLookups>();
 
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("cs-CZ");
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("cs-CZ");

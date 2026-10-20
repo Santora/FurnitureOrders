@@ -1,0 +1,93 @@
+{
+  "entity": "Customer",
+  "title": "Zákazníci (dynamický grid)",
+  "pageSize": 10,
+  "detailUrl": "customers/{Id}",
+  "defaultSort": {
+    "field": "CustomerNumber",
+    "direction": "Ascending"
+  },
+  "columns": [
+    {
+      "field": "CustomerNumber",
+      "label": "Číslo",
+      "dataType": "String",
+      "displayType": "DetailLink",
+      "filterType": "TextBox",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 1
+    },
+    {
+      "field": "Name",
+      "label": "Název",
+      "dataType": "String",
+      "displayType": "Text",
+      "filterType": "TextBox",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 2
+    },
+    {
+      "field": "Type",
+      "label": "Typ",
+      "dataType": "Enum",
+      "displayType": "Select",
+      "filterType": "Select",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 3,
+      "options": {
+        "source": "Enum",
+        "enumType": "CustomerType"
+      }
+    },
+    {
+      "field": "ContactPerson",
+      "label": "Kontakt",
+      "dataType": "String",
+      "displayType": "Text",
+      "sortable": true,
+      "filterable": false,
+      "visible": true,
+      "order": 4
+    },
+    {
+      "field": "Email",
+      "label": "E-mail",
+      "dataType": "String",
+      "displayType": "Text",
+      "filterType": "TextBox",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 5
+    },
+    {
+      "field": "City",
+      "label": "Město",
+      "dataType": "String",
+      "displayType": "Text",
+      "filterType": "Select",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 6,
+      "options": { "source": "Distinct" }
+    },
+    {
+      "field": "IsActive",
+      "label": "Aktivní",
+      "dataType": "Boolean",
+      "displayType": "Checkbox",
+      "filterType": "CheckBox",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 7
+    }
+  ]
+}

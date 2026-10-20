@@ -58,6 +58,16 @@
         <span class="dismiss">🗙</span>
     </div>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script>
+        window.downloadFile = (fileName, contentType, base64) => {
+            const a = document.createElement('a');
+            a.href = `data:${contentType};base64,${base64}`;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        };
+    </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 </body>
 

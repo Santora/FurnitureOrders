@@ -1,0 +1,99 @@
+{
+  "entity": "Order",
+  "title": "Zakázky (dynamický grid)",
+  "pageSize": 10,
+  "detailUrl": "orders/{Id}",
+  "defaultSort": {
+    "field": "CreatedDate",
+    "direction": "Descending"
+  },
+  "columns": [
+    {
+      "field": "OrderNumber",
+      "label": "Číslo zakázky",
+      "dataType": "String",
+      "displayType": "DetailLink",
+      "filterType": "TextBox",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 1
+    },
+    {
+      "field": "CustomerName",
+      "label": "Zákazník",
+      "dataType": "String",
+      "displayType": "Text",
+      "sortable": true,
+      "filterable": false,
+      "visible": true,
+      "order": 2
+    },
+    {
+      "field": "CustomerId",
+      "label": "Zákazník (výběr)",
+      "dataType": "Integer",
+      "displayType": "Number",
+      "filterType": "Select",
+      "sortable": false,
+      "filterable": true,
+      "visible": false,
+      "order": 3,
+      "options": {
+        "source": "Lookup",
+        "lookup": "customers"
+      }
+    },
+    {
+      "field": "CreatedDate",
+      "label": "Vytvořeno",
+      "dataType": "Date",
+      "displayType": "Date",
+      "filterType": "DateRange",
+      "format": "dd.MM.yyyy",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 4
+    },
+    {
+      "field": "RequiredDeliveryDate",
+      "label": "Požadovaný termín",
+      "dataType": "Date",
+      "displayType": "Date",
+      "filterType": "DateRange",
+      "format": "dd.MM.yyyy",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 5
+    },
+    {
+      "field": "Status",
+      "label": "Stav",
+      "dataType": "Enum",
+      "displayType": "Select",
+      "filterType": "Select",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 6,
+      "options": {
+        "source": "Enum",
+        "enumType": "OrderStatus"
+      }
+    },
+    {
+      "field": "TotalPrice",
+      "label": "Cena bez DPH",
+      "dataType": "Decimal",
+      "displayType": "Currency",
+      "filterType": "NumberRange",
+      "format": "N2",
+      "sortable": true,
+      "filterable": true,
+      "visible": true,
+      "order": 7
+    }
+  ]
+}

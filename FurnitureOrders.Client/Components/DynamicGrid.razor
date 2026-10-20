@@ -1,0 +1,474 @@
+﻿@typeparam TItem where TItem : class
+@using System.Text
+@using System.Text.RegularExpressions
+@inject GridConfigLoader Loader
+@inject GridLookups Lookups
+@inject IJSRuntime Js
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-3" />
+}
+
+@if (_errors.Count > 0)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <MudText Typo="Typo.subtitle1">Konfiguraci přehledu „@ConfigName“ nelze použít:</MudText>
+        <ul>
+            @foreach (var error in _errors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </MudAlert>
+}
+else if (_config is not null)
+{
+    <MudText Typo="Typo.h5" Class="mb-3">@_config.Title</MudText>
+
+    @if (_dataError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">
+            @_dataError
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadDataAsync">Zkusit znovu</MudButton>
+        </MudAlert>
+    }
+
+    @if (_columns.Any(c => c.FilterType.Length > 0))
+    {
+        <MudPaper Class="pa-3 mb-3">
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3" AlignItems="AlignItems.End">
+                @foreach (var col in _columns.Where(c => c.FilterType.Length > 0))
+                {
+                    var f = _filters[col.Field];
+                    var type = col.FilterType.ToLowerInvariant();
+
+                    @if (type == "textbox")
+                    {
+                        <MudTextField T="string" Label="@col.Config.Label" Value="f.Text" DebounceInterval="300"
+                                      ValueChanged="@((string? v) => { f.Text = v; Changed(); })"
+                                      Clearable="true" Style="min-width:200px" />
+                    }
+                    else if (type == "numberrange")
+                    {
+                        <MudNumericField T="decimal?" Label="@($"{col.Config.Label} od")" Value="f.Min" HideSpinButtons="true"
+                                         ValueChanged="@((decimal? v) => { f.Min = v; Changed(); })" Style="width:140px" />
+                        <MudNumericField T="decimal?" Label="@($"{col.Config.Label} do")" Value="f.Max" HideSpinButtons="true"
+                                         ValueChanged="@((decimal? v) => { f.Max = v; Changed(); })" Style="width:140px" />
+                    }
+                    else if (type == "daterange")
+                    {
+                        <div style="width:170px">
+                            <DatePickerField Label="@($"{col.Config.Label} od")" Value="f.From"
+                                             ValueChanged="@((DateOnly? v) => { f.From = v; Changed(); })" />
+                        </div>
+                        <div style="width:170px">
+                            <DatePickerField Label="@($"{col.Config.Label} do")" Value="f.To"
+                                             ValueChanged="@((DateOnly? v) => { f.To = v; Changed(); })" />
+                        </div>
+                    }
+                    else if (type == "checkbox")
+                    {
+                        <MudSelect T="bool?" Label="@col.Config.Label" Value="f.Flag" Style="width:150px"
+                                   ValueChanged="@((bool? v) => { f.Flag = v; Changed(); })">
+                            <MudSelectItem T="bool?" Value="@((bool?)null)">Vše</MudSelectItem>
+                            <MudSelectItem T="bool?" Value="@((bool?)true)">Ano</MudSelectItem>
+                            <MudSelectItem T="bool?" Value="@((bool?)false)">Ne</MudSelectItem>
+                        </MudSelect>
+                    }
+                    else if (type == "select")
+                    {
+                        <MudSelect T="string" Label="@col.Config.Label" Value="f.Selected" Style="min-width:200px"
+                                   ValueChanged="@((string? v) => { f.Selected = v; Changed(); })">
+                            <MudSelectItem T="string" Value="@((string?)null)">Vše</MudSelectItem>
+                            @foreach (var option in col.Options)
+                            {
+                                <MudSelectItem T="string" Value="@option.Value">@option.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                }
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudStack Row="true" Spacing="2" Class="mb-2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+        <MudText Typo="Typo.body2">Zobrazeno @_view.Count z @_items.Count záznamů</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="ResetFilters">Zrušit filtry</MudButton>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => _showColumns = !_showColumns)">Sloupce</MudButton>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="ExportAsync">Export CSV</MudButton>
+    </MudStack>
+
+    @if (_showColumns)
+    {
+        <MudPaper Class="pa-3 mb-3">
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3">
+                @foreach (var col in _columns)
+                {
+                    var field = col.Field;
+                    <MudCheckBox T="bool" Label="@col.Config.Label" Value="@_shown.Contains(field)"
+                                 ValueChanged="@((bool on) => ToggleColumn(field, on))" />
+                }
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudPaper Style="overflow-x:auto">
+        <MudSimpleTable Hover="true" Dense="true">
+            <thead>
+                <tr>
+                    @foreach (var col in VisibleColumns)
+                    {
+                        <th style="@AlignStyle(col)">
+                            @if (col.Config.Sortable)
+                            {
+                                <SortableHeader Text="@col.Config.Label" Key="@col.Field" CurrentKey="@_sortField"
+                                                Desc="_desc" OnSort="SortBy" />
+                            }
+                            else
+                            {
+                                @col.Config.Label
+                            }
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in PageItems)
+                {
+                    <tr>
+                        @foreach (var col in VisibleColumns)
+                        {
+                            <td style="@AlignStyle(col)">@RenderCell(item, col)</td>
+                        }
+                    </tr>
+                }
+                @if (_view.Count == 0 && !_loading)
+                {
+                    <tr><td colspan="@Math.Max(1, VisibleColumns.Count())" class="pa-4">Žádné záznamy neodpovídají filtru.</td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (PageCount > 1)
+    {
+        <MudStack Row="true" Justify="Justify.Center" Class="mt-3">
+            <MudPagination Count="PageCount" Selected="_page" SelectedChanged="OnPageChanged" />
+        </MudStack>
+    }
+}
+
+@code {
+    /// Název souboru konfigurace bez přípony (wwwroot/grids/{ConfigName}.json).
+    [Parameter, EditorRequired] public string ConfigName { get; set; } = "";
+
+    /// Zdroj dat: komponenta o API nic neví.
+    [Parameter, EditorRequired] public Func<CancellationToken, Task<IReadOnlyList<TItem>>> LoadItems { get; set; } = default!;
+
+    /// Volitelné vlastní šablony buněk podle názvu pole.
+    [Parameter] public IReadOnlyDictionary<string, RenderFragment<TItem>>? CellTemplates { get; set; }
+
+    private GridConfig? _config;
+    private List<GridColumn<TItem>> _columns = [];
+    private List<string> _errors = [];
+    private string? _dataError;
+    private IReadOnlyList<TItem> _items = [];
+    private List<TItem> _view = [];
+    private readonly Dictionary<string, FilterState> _filters = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _shown = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Func<TItem, object?>> _linkGetters = new(StringComparer.OrdinalIgnoreCase);
+    private string? _sortField;
+    private bool _desc;
+    private int _page = 1;
+    private int _pageSize = 20;
+    private bool _loading;
+    private bool _showColumns;
+    private string? _loadedName;
+
+    private IEnumerable<GridColumn<TItem>> VisibleColumns => _columns.Where(c => _shown.Contains(c.Field));
+    private int PageCount => Math.Max(1, (int)Math.Ceiling(_view.Count / (double)_pageSize));
+    private IEnumerable<TItem> PageItems => _view.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedName == ConfigName) return;
+        _loadedName = ConfigName;
+        await InitializeAsync();
+    }
+
+    // ---------------------------------------------------------------- načtení
+
+    private async Task InitializeAsync()
+    {
+        _loading = true;
+        _errors = [];
+        _dataError = null;
+        _config = null;
+        _columns = [];
+        _filters.Clear();
+        _shown.Clear();
+        _linkGetters.Clear();
+
+        try
+        {
+            var parsed = await Loader.LoadAsync(ConfigName);
+            if (!parsed.IsValid)
+            {
+                _errors = parsed.Errors.ToList();
+                return;
+            }
+
+            var config = parsed.Config!;
+            var (columns, bindErrors) = GridColumnBinder.Bind<TItem>(config);
+            var errors = new List<string>(bindErrors);
+
+            foreach (var col in config.Columns.Where(c => !GridCellRenderers.IsRegistered(c.DisplayType)))
+                errors.Add($"columns ({col.Field}).displayType: pro '{col.DisplayType}' není zaregistrován renderer.");
+
+            errors.AddRange(BuildLinkGetters(config));
+            await ResolveOptionsAsync(columns, errors);
+
+            if (errors.Count > 0)
+            {
+                _errors = errors;
+                return;
+            }
+
+            _config = config;
+            _columns = columns;
+            _pageSize = config.PageSize;
+            foreach (var col in columns.Where(c => c.Config.Visible)) _shown.Add(col.Field);
+            foreach (var col in columns.Where(c => c.FilterType.Length > 0)) _filters[col.Field] = new FilterState();
+
+            _sortField = columns.FirstOrDefault(c => string.Equals(c.Field, config.DefaultSort?.Field, StringComparison.OrdinalIgnoreCase))?.Field;
+            _desc = config.DefaultSort?.Direction == GridSortDirection.Descending;
+
+            await LoadDataAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _dataError = null;
+        try
+        {
+            _items = await LoadItems(CancellationToken.None);
+        }
+        catch (HttpRequestException)
+        {
+            _items = [];
+            _dataError = "Data se nepodařilo načíst. Server není dostupný.";
+        }
+
+        foreach (var col in _columns.Where(c => string.Equals(c.Config.Options?.Source, "Distinct", StringComparison.OrdinalIgnoreCase)))
+        {
+            var options = _items
+                .Select(i => GridValue.Key(col.Get(i)))
+                .Where(v => !string.IsNullOrEmpty(v))
+                .Distinct()
+                .OrderBy(v => v, StringComparer.CurrentCultureIgnoreCase)
+                .Select(v => new GridOption(v!, v!))
+                .ToList();
+            SetOptions(col, options);
+        }
+
+        Apply();
+    }
+
+    private IEnumerable<string> BuildLinkGetters(GridConfig config)
+    {
+        if (string.IsNullOrWhiteSpace(config.DetailUrl)) yield break;
+
+        foreach (Match m in Regex.Matches(config.DetailUrl, @"\{(\w+)\}"))
+        {
+            var name = m.Groups[1].Value;
+            var getter = GridColumnBinder.TryGetGetter<TItem>(name);
+
+            if (getter is null) yield return $"detailUrl: typ {typeof(TItem).Name} nemá vlastnost '{name}'.";
+            else _linkGetters[name] = getter;
+        }
+    }
+
+    private async Task ResolveOptionsAsync(List<GridColumn<TItem>> columns, List<string> errors)
+    {
+        foreach (var col in columns.Where(c => c.Config.Options is not null))
+        {
+            var o = col.Config.Options!;
+            IReadOnlyList<GridOption>? options = null;
+
+            switch (o.Source.ToLowerInvariant())
+            {
+                case "static":
+                    options = o.Items.Select(i => new GridOption(i.Value, i.Label)).ToList();
+                    break;
+
+                case "enum":
+                    options = GridEnums.Get(o.EnumType ?? "");
+                    if (options is null)
+                        errors.Add($"columns ({col.Field}).options.enumType: výčet '{o.EnumType}' není zaregistrován.");
+                    break;
+
+                case "lookup":
+                    if (!Lookups.IsRegistered(o.Lookup ?? ""))
+                    {
+                        errors.Add($"columns ({col.Field}).options.lookup: poskytovatel '{o.Lookup}' není zaregistrován.");
+                        break;
+                    }
+                    try
+                    {
+                        options = await Lookups.GetAsync(o.Lookup!);
+                    }
+                    catch (HttpRequestException)
+                    {
+                        errors.Add($"columns ({col.Field}).options.lookup: číselník '{o.Lookup}' se nepodařilo načíst, server není dostupný.");
+                    }
+                    break;
+
+                case "distinct":
+                    options = [];   // doplní se po načtení dat
+                    break;
+            }
+
+            if (options is not null) SetOptions(col, options);
+        }
+    }
+
+    private static void SetOptions(GridColumn<TItem> col, IReadOnlyList<GridOption> options)
+    {
+        col.Options = options;
+        var labels = new Dictionary<string, string>();
+        foreach (var option in options) labels.TryAdd(option.Value, option.Label);
+        col.OptionLabels = labels;
+    }
+
+    // ------------------------------------------------- filtrování, řazení, stránky
+
+    private void Apply()
+    {
+        IEnumerable<TItem> query = _items;
+
+        foreach (var col in _columns.Where(c => c.FilterType.Length > 0))
+        {
+            if (_filters.TryGetValue(col.Field, out var f) && f.IsActive)
+                query = query.Where(i => GridFiltering.Matches(col.Get(i), col.FilterType, f));
+        }
+
+        var list = query.ToList();
+
+        var sortColumn = _columns.FirstOrDefault(c => c.Field == _sortField);
+        if (sortColumn is not null)
+        {
+            list = (_desc
+                ? list.OrderByDescending(i => sortColumn.Get(i), GridFiltering.Comparer)
+                : list.OrderBy(i => sortColumn.Get(i), GridFiltering.Comparer)).ToList();
+        }
+
+        _view = list;
+        if (_page > PageCount) _page = PageCount;
+        if (_page < 1) _page = 1;
+    }
+
+    private void Changed()
+    {
+        _page = 1;
+        Apply();
+    }
+
+    private void ResetFilters()
+    {
+        foreach (var key in _filters.Keys.ToList()) _filters[key] = new FilterState();
+        Changed();
+    }
+
+    private void SortBy(string key)
+    {
+        _desc = _sortField == key && !_desc;
+        _sortField = key;
+        _page = 1;
+        Apply();
+    }
+
+    private void OnPageChanged(int page) => _page = page;
+
+    private void ToggleColumn(string field, bool on)
+    {
+        if (on) _shown.Add(field);
+        else _shown.Remove(field);
+    }
+
+    // -------------------------------------------------------------- vykreslení
+
+    private static string? AlignStyle(GridColumn<TItem> col) =>
+        col.Config.DataType.Equals("Integer", StringComparison.OrdinalIgnoreCase)
+        || col.Config.DataType.Equals("Decimal", StringComparison.OrdinalIgnoreCase)
+            ? "text-align:right" : null;
+
+    private string CellText(TItem item, GridColumn<TItem> col) =>
+        GridCellRenderers.Get(col.Config.DisplayType)
+            .Text(new GridCellContext(col.Get(item), col.Config, col.OptionLabels));
+
+    private string LinkFor(TItem item) =>
+        Regex.Replace(_config!.DetailUrl ?? "", @"\{(\w+)\}",
+            m => Uri.EscapeDataString(GridValue.Key(_linkGetters[m.Groups[1].Value](item)) ?? ""));
+
+    private RenderFragment RenderCell(TItem item, GridColumn<TItem> col)
+    {
+        if (CellTemplates is not null && CellTemplates.TryGetValue(col.Field, out var template))
+            return template(item);
+
+        var renderer = GridCellRenderers.Get(col.Config.DisplayType);
+        var text = CellText(item, col);
+
+        if (renderer.Kind == CellKind.Check)
+        {
+            var isChecked = col.Get(item) is true;
+            RenderFragment check = @<MudIcon Icon="@(isChecked ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)" Size="Size.Small" />;
+            return check;
+        }
+
+        if (renderer.Kind == CellKind.Link)
+        {
+            var href = LinkFor(item);
+            RenderFragment link = @<MudLink Href="@href">@text</MudLink>;
+            return link;
+        }
+
+        RenderFragment plain = @<span>@text</span>;
+        return plain;
+    }
+
+    // -------------------------------------------------------------- export CSV
+
+    private async Task ExportAsync()
+    {
+        var cols = VisibleColumns.ToList();
+        var sb = new StringBuilder();
+
+        sb.AppendLine(string.Join(';', cols.Select(c => Csv(c.Config.Label, false))));
+        foreach (var item in _view)
+            sb.AppendLine(string.Join(';', cols.Select(c => Csv(CellText(item, c), c.Config.DataType.Equals("String", StringComparison.OrdinalIgnoreCase)))));
+
+        var bytes = new UTF8Encoding(true).GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+        var fileName = $"{_config!.Entity.ToLowerInvariant()}-{DateTime.Now:yyyyMMdd-HHmm}.csv";
+
+        await Js.InvokeVoidAsync("downloadFile", fileName, "text/csv;charset=utf-8", Convert.ToBase64String(bytes));
+    }
+
+    private static string Csv(string value, bool guardFormula)
+    {
+        // text začínající = + - @ by tabulkový procesor vyhodnotil jako vzorec
+        if (guardFormula && value.Length > 0 && "=+-@\t\r".Contains(value[0]))
+            value = "'" + value;
+
+        return value.IndexOfAny([';', '"', '\n', '\r']) >= 0
+            ? "\"" + value.Replace("\"", "\"\"") + "\""
+            : value;
+    }
+}

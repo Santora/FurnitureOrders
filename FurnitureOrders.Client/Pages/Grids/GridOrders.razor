@@ -1,0 +1,11 @@
+﻿@page "/grid/orders"
+@inject OrderApiClient Api
+
+<PageTitle>Zakázky (dynamický grid)</PageTitle>
+
+<DynamicGrid TItem="OrderListItemDto" ConfigName="orders" LoadItems="LoadAsync" />
+
+@code {
+    private async Task<IReadOnlyList<OrderListItemDto>> LoadAsync(CancellationToken ct) =>
+        await Api.ListAsync(new OrderQuery(null, null, null, null, null, "created", true), ct);
+}
