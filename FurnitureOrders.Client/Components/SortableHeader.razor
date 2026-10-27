@@ -2,6 +2,12 @@
            Style="text-transform:none; font-weight:inherit; font-size:inherit; padding:0; min-width:0"
            EndIcon="@Icon" OnClick="@(() => OnSort.InvokeAsync(Key))">@Text</MudButton>
 
+@*
+    Clickable column header used by list pages and by DynamicGrid. It holds no sort state of its own:
+    the parent passes the currently sorted key (CurrentKey) and direction (Desc), the header shows an arrow
+    when it is the active column, and reports clicks through OnSort(Key). The parent decides what a click means.
+*@
+
 @code {
     [Parameter, EditorRequired] public string Text { get; set; } = "";
     [Parameter, EditorRequired] public string Key { get; set; } = "";

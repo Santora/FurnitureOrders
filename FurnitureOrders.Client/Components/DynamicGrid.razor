@@ -5,11 +5,47 @@
 @inject GridLookups Lookups
 @inject IJSRuntime Js
 
+@*
+    DynamicGrid<TItem> - reusable overview grid driven by a JSON configuration.
+
+    See the architecture overview at the top of FurnitureOrders.Shared/Grid/GridConfig.cs for the big picture.
+    This component is the orchestrator: it owns the UI state and wires the pure logic from FurnitureOrders.Shared.Grid
+    (parsing, validation, binding, filtering, formatting) to MudBlazor controls.
+
+    MINIMAL USE (a page for a new overview is just this):
+
+        <DynamicGrid TItem="OrderListItemDto" ConfigName="orders" LoadItems="LoadAsync" />
+
+        @code {
+            private Task<IReadOnlyList<OrderListItemDto>> LoadAsync(CancellationToken ct) => Api.ListAsync(...);
+        }
+
+    The component knows nothing about the API or about any particular entity. The row type arrives as the
+    type parameter TItem (constrained to a reference type, i.e. a DTO), and the rows arrive through the
+    LoadItems delegate. Everything else (which columns, how they look) comes from wwwroot/grids/{ConfigName}.json.
+
+    LIFECYCLE
+      1. OnParametersSetAsync    runs InitializeAsync once per ConfigName (not on every re-render).
+      2. InitializeAsync         load config -> bind columns to TItem -> check renderers and link placeholders ->
+                                 resolve option lists. Any error aborts here and the error list is shown instead of the grid.
+      3. LoadDataAsync           calls LoadItems, fills "Distinct" option lists from the data, then Apply().
+      4. Apply                   filters -> sorts -> stores the result in _view. Called after every user change.
+      5. Render                  takes the current page out of _view (PageItems) and draws it.
+
+    The data is loaded once and kept in _items; filtering, sorting and paging never go back to the server.
+
+    RENDERED STATES (top to bottom, only one branch of the first two is ever shown)
+      - progress bar while loading
+      - configuration error alert (grid is not rendered at all)
+      - title, data-load error with retry, filter panel, toolbar, optional column picker, table, pager
+*@
+
 @if (_loading)
 {
     <MudProgressLinear Indeterminate="true" Class="mb-3" />
 }
 
+@* Configuration problems: every error from every pipeline stage in one list, and no grid is drawn. *@
 @if (_errors.Count > 0)
 {
     <MudAlert Severity="Severity.Error" Class="mb-4">
@@ -26,6 +62,7 @@ else if (_config is not null)
 {
     <MudText Typo="Typo.h5" Class="mb-3">@_config.Title</MudText>
 
+    @* Data problems are separate from configuration problems: the grid structure stays, only the rows are missing. *@
     @if (_dataError is not null)
     {
         <MudAlert Severity="Severity.Error" Class="mb-3">
@@ -34,6 +71,13 @@ else if (_config is not null)
         </MudAlert>
     }
 
+    @*
+        Filter panel. One control (or pair of controls for ranges) per filterable column, chosen by the column's
+        effective FilterType. Each control writes into that column's FilterState and calls Changed(), which
+        returns to page 1 and re-applies all filters. The filter panel is built from ALL columns, including
+        hidden ones, so a column can filter without being visible.
+        A new filter type needs a new branch here and a case in GridFiltering.Matches.
+    *@
     @if (_columns.Any(c => c.FilterType.Length > 0))
     {
         <MudPaper Class="pa-3 mb-3">
@@ -45,6 +89,7 @@ else if (_config is not null)
 
                     @if (type == "textbox")
                     {
+                        @* Text: DebounceInterval waits 300 ms after the last keystroke so typing does not re-filter on every character. *@
                         <MudTextField T="string" Label="@col.Config.Label" Value="f.Text" DebounceInterval="300"
                                       ValueChanged="@((string? v) => { f.Text = v; Changed(); })"
                                       Clearable="true" Style="min-width:200px" />
@@ -69,6 +114,7 @@ else if (_config is not null)
                     }
                     else if (type == "checkbox")
                     {
+                        @* Boolean: a three-state dropdown (All / Yes / No); a plain check box could not express "do not filter". *@
                         <MudSelect T="bool?" Label="@col.Config.Label" Value="f.Flag" Style="width:150px"
                                    ValueChanged="@((bool? v) => { f.Flag = v; Changed(); })">
                             <MudSelectItem T="bool?" Value="@((bool?)null)">Vše</MudSelectItem>
@@ -78,6 +124,7 @@ else if (_config is not null)
                     }
                     else if (type == "select")
                     {
+                        @* Select: the first item (null) means "All"; the others come from the column's resolved options. *@
                         <MudSelect T="string" Label="@col.Config.Label" Value="f.Selected" Style="min-width:200px"
                                    ValueChanged="@((string? v) => { f.Selected = v; Changed(); })">
                             <MudSelectItem T="string" Value="@((string?)null)">Vše</MudSelectItem>
@@ -92,6 +139,7 @@ else if (_config is not null)
         </MudPaper>
     }
 
+    @* Toolbar: result counter (filtered of total), reset of all filters, column picker toggle, CSV export. *@
     <MudStack Row="true" Spacing="2" Class="mb-2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
         <MudText Typo="Typo.body2">Zobrazeno @_view.Count z @_items.Count záznamů</MudText>
         <MudSpacer />
@@ -101,13 +149,14 @@ else if (_config is not null)
                    OnClick="ExportAsync">Export CSV</MudButton>
     </MudStack>
 
+    @* Column picker: per-session show/hide of columns. The choice is kept in _shown only and is not persisted. *@
     @if (_showColumns)
     {
         <MudPaper Class="pa-3 mb-3">
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="3">
                 @foreach (var col in _columns)
                 {
-                    var field = col.Field;
+                    var field = col.Field;   // copied to a local so each lambda captures its own column, not the loop variable
                     <MudCheckBox T="bool" Label="@col.Config.Label" Value="@_shown.Contains(field)"
                                  ValueChanged="@((bool on) => ToggleColumn(field, on))" />
                 }
@@ -115,6 +164,11 @@ else if (_config is not null)
         </MudPaper>
     }
 
+    @*
+        The table. MudSimpleTable only draws what it is given: filtering, sorting and paging are done by this
+        component (see Apply), so only the current page of rows (PageItems) is rendered, and only the visible
+        columns. overflow-x lets wide grids scroll horizontally instead of breaking the page layout.
+    *@
     <MudPaper Style="overflow-x:auto">
         <MudSimpleTable Hover="true" Dense="true">
             <thead>
@@ -122,6 +176,7 @@ else if (_config is not null)
                     @foreach (var col in VisibleColumns)
                     {
                         <th style="@AlignStyle(col)">
+                            @* Only columns marked "sortable" in the configuration get a clickable header. *@
                             @if (col.Config.Sortable)
                             {
                                 <SortableHeader Text="@col.Config.Label" Key="@col.Field" CurrentKey="@_sortField"
@@ -145,6 +200,7 @@ else if (_config is not null)
                         }
                     </tr>
                 }
+                @* Empty result. Not shown while loading, to avoid flashing "no records" before the data arrives. *@
                 @if (_view.Count == 0 && !_loading)
                 {
                     <tr><td colspan="@Math.Max(1, VisibleColumns.Count())" class="pa-4">Žádné záznamy neodpovídají filtru.</td></tr>
@@ -153,6 +209,7 @@ else if (_config is not null)
         </MudSimpleTable>
     </MudPaper>
 
+    @* Pager, shown only when the filtered result does not fit on one page. *@
     @if (PageCount > 1)
     {
         <MudStack Row="true" Justify="Justify.Center" Class="mt-3">
@@ -162,36 +219,73 @@ else if (_config is not null)
 }
 
 @code {
-    /// Název souboru konfigurace bez přípony (wwwroot/grids/{ConfigName}.json).
+    // ------------------------------------------------------------ public API (parameters)
+
+    /// <summary>
+    /// Name of the configuration file without extension: <c>"orders"</c> loads <c>wwwroot/grids/orders.json</c>.
+    /// Changing this value at run time reloads the whole grid; see <see cref="OnParametersSetAsync"/>.
+    /// </summary>
     [Parameter, EditorRequired] public string ConfigName { get; set; } = "";
 
-    /// Zdroj dat: komponenta o API nic neví.
+    /// <summary>
+    /// Data source: a delegate that returns all rows. The component knows nothing about the API, which keeps
+    /// it reusable and lets a page decide how and with what default query the data is fetched.
+    /// It is called once per initialisation and again on "Zkusit znovu" (retry); there is no automatic refresh,
+    /// so a page that changes the data must re-create the component (for example by navigating to it again).
+    /// An <see cref="HttpRequestException"/> from the delegate is handled and shown as a data error; any
+    /// other exception is not caught here.
+    /// </summary>
     [Parameter, EditorRequired] public Func<CancellationToken, Task<IReadOnlyList<TItem>>> LoadItems { get; set; } = default!;
 
-    /// Volitelné vlastní šablony buněk podle názvu pole.
+    /// <summary>
+    /// Optional custom cell content keyed by column <c>field</c> (matched case-insensitively), for the cases the
+    /// built-in display types cannot express, such as a coloured status chip. A template replaces the normal
+    /// rendering of that column's cells only; sorting, filtering and CSV export still use the underlying value
+    /// and the configured display type.
+    /// </summary>
     [Parameter] public IReadOnlyDictionary<string, RenderFragment<TItem>>? CellTemplates { get; set; }
 
+    // ------------------------------------------------------------ state
+
+    // Configuration and its bound form. _config is null while loading or after a configuration error;
+    // the markup uses that to decide whether to draw the grid at all.
     private GridConfig? _config;
     private List<GridColumn<TItem>> _columns = [];
     private List<string> _errors = [];
     private string? _dataError;
+
+    // _items = everything the data source returned (never modified after load).
+    // _view  = _items after filters and sort; this is what is paged and exported.
     private IReadOnlyList<TItem> _items = [];
     private List<TItem> _view = [];
-    private readonly Dictionary<string, FilterState> _filters = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _shown = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, Func<TItem, object?>> _linkGetters = new(StringComparer.OrdinalIgnoreCase);
-    private string? _sortField;
-    private bool _desc;
-    private int _page = 1;
-    private int _pageSize = 20;
-    private bool _loading;
-    private bool _showColumns;
-    private string? _loadedName;
 
+    // Per-column UI state, keyed by field name. Only filterable columns have a FilterState.
+    private readonly Dictionary<string, FilterState> _filters = new(StringComparer.OrdinalIgnoreCase);
+
+    // Fields of the columns currently shown (initially those with "visible": true).
+    private readonly HashSet<string> _shown = new(StringComparer.OrdinalIgnoreCase);
+
+    // Compiled getters for the {Placeholders} of detailUrl, built once in BuildLinkGetters.
+    private readonly Dictionary<string, Func<TItem, object?>> _linkGetters = new(StringComparer.OrdinalIgnoreCase);
+
+    private string? _sortField;      // field of the sorted column, or null for "as returned by the data source"
+    private bool _desc;
+    private int _page = 1;           // one-based
+    private int _pageSize = 20;      // overwritten from the configuration
+    private bool _loading;
+    private bool _showColumns;       // whether the column picker panel is open
+    private string? _loadedName;     // ConfigName that the current state was built for
+
+    // Derived values. Cheap enough to recompute per render because they only slice in-memory lists.
     private IEnumerable<GridColumn<TItem>> VisibleColumns => _columns.Where(c => _shown.Contains(c.Field));
     private int PageCount => Math.Max(1, (int)Math.Ceiling(_view.Count / (double)_pageSize));
     private IEnumerable<TItem> PageItems => _view.Skip((_page - 1) * _pageSize).Take(_pageSize);
 
+    /// <summary>
+    /// Blazor calls this whenever the parent re-renders and passes parameters. Without the guard the grid would
+    /// reload its configuration and data (and lose the user's filters) on every parent render. Only an actual
+    /// change of <see cref="ConfigName"/> triggers a new initialisation.
+    /// </summary>
     protected override async Task OnParametersSetAsync()
     {
         if (_loadedName == ConfigName) return;
@@ -199,8 +293,14 @@ else if (_config is not null)
         await InitializeAsync();
     }
 
-    // ---------------------------------------------------------------- načtení
+    // ------------------------------------------------------------ loading
 
+    /// <summary>
+    /// Builds the grid from scratch: load configuration, bind it to <typeparamref name="TItem"/>, verify the
+    /// pieces that only the client can verify (renderers, link placeholders, option sources), then load data.
+    /// Errors from all stages are accumulated in one list; if there is any, <c>_config</c> stays null and the
+    /// grid is not shown. State is reset first so that switching <see cref="ConfigName"/> never shows leftovers.
+    /// </summary>
     private async Task InitializeAsync()
     {
         _loading = true;
@@ -214,6 +314,7 @@ else if (_config is not null)
 
         try
         {
+            // Stage 1+2: read the file, parse JSON, run the static validator (all inside the loader).
             var parsed = await Loader.LoadAsync(ConfigName);
             if (!parsed.IsValid)
             {
@@ -221,13 +322,18 @@ else if (_config is not null)
                 return;
             }
 
+            // Stage 3: reflection check against TItem. From here on errors are COLLECTED rather than returned
+            // immediately, so the author sees every remaining problem in one go.
             var config = parsed.Config!;
             var (columns, bindErrors) = GridColumnBinder.Bind<TItem>(config);
             var errors = new List<string>(bindErrors);
 
+            // The validator accepts any name from GridVocabulary; this checks that a renderer really exists for it
+            // (a name added to the vocabulary but never registered would otherwise silently render as plain text).
             foreach (var col in config.Columns.Where(c => !GridCellRenderers.IsRegistered(c.DisplayType)))
                 errors.Add($"columns ({col.Field}).displayType: pro '{col.DisplayType}' není zaregistrován renderer.");
 
+            // detailUrl placeholders must name real properties of TItem; option sources must be resolvable.
             errors.AddRange(BuildLinkGetters(config));
             await ResolveOptionsAsync(columns, errors);
 
@@ -237,12 +343,15 @@ else if (_config is not null)
                 return;
             }
 
+            // Everything checked out: commit the state in one block so a half-initialised grid can never be rendered.
             _config = config;
             _columns = columns;
             _pageSize = config.PageSize;
             foreach (var col in columns.Where(c => c.Config.Visible)) _shown.Add(col.Field);
             foreach (var col in columns.Where(c => c.FilterType.Length > 0)) _filters[col.Field] = new FilterState();
 
+            // The default sort field is looked up among the bound columns to take the exact casing of the field;
+            // it is already known to exist and to be sortable thanks to the validator.
             _sortField = columns.FirstOrDefault(c => string.Equals(c.Field, config.DefaultSort?.Field, StringComparison.OrdinalIgnoreCase))?.Field;
             _desc = config.DefaultSort?.Direction == GridSortDirection.Descending;
 
@@ -250,10 +359,15 @@ else if (_config is not null)
         }
         finally
         {
-            _loading = false;
+            _loading = false;   // also on the early returns above
         }
     }
 
+    /// <summary>
+    /// Fetches the rows, completes the option lists that depend on the data, and applies the initial
+    /// filter/sort. Also the target of the "Zkusit znovu" (retry) button, which is why it can be called more
+    /// than once per initialisation and why it clears the previous error first.
+    /// </summary>
     private async Task LoadDataAsync()
     {
         _dataError = null;
@@ -263,10 +377,14 @@ else if (_config is not null)
         }
         catch (HttpRequestException)
         {
+            // The grid is still shown (with the retry button and an empty table) so a temporary outage
+            // does not hide the structure or the user's filter settings.
             _items = [];
             _dataError = "Data se nepodařilo načíst. Server není dostupný.";
         }
 
+        // "Distinct" options are derived from the data itself: unique non-empty values, sorted alphabetically.
+        // They can only be built now, which is why ResolveOptionsAsync left them empty.
         foreach (var col in _columns.Where(c => string.Equals(c.Config.Options?.Source, "Distinct", StringComparison.OrdinalIgnoreCase)))
         {
             var options = _items
@@ -282,6 +400,12 @@ else if (_config is not null)
         Apply();
     }
 
+    /// <summary>
+    /// Prepares the {Placeholder} substitution of <c>detailUrl</c>: for each placeholder, builds a getter on
+    /// <typeparamref name="TItem"/> (stored in <c>_linkGetters</c>) or yields an error if the property does not exist.
+    /// Doing this up front turns a typo in the template into a configuration error instead of a broken link
+    /// on every row.
+    /// </summary>
     private IEnumerable<string> BuildLinkGetters(GridConfig config)
     {
         if (string.IsNullOrWhiteSpace(config.DetailUrl)) yield break;
@@ -296,6 +420,12 @@ else if (_config is not null)
         }
     }
 
+    /// <summary>
+    /// Fills <see cref="GridColumn{TItem}.Options"/> for every column that declares <c>options</c>, according to its
+    /// <c>source</c>: Static (from the JSON), Enum (registry in <c>GridEnums</c>), Lookup (provider in
+    /// <c>GridLookups</c>, may call the API) or Distinct (deferred: needs the data, see <see cref="LoadDataAsync"/>).
+    /// A source that cannot be resolved adds an error and leaves that column's options untouched.
+    /// </summary>
     private async Task ResolveOptionsAsync(List<GridColumn<TItem>> columns, List<string> errors)
     {
         foreach (var col in columns.Where(c => c.Config.Options is not null))
@@ -340,6 +470,8 @@ else if (_config is not null)
         }
     }
 
+    // Stores the options and, alongside, the value->label dictionary used when rendering Select cells.
+    // TryAdd keeps the first label if two options share a value, rather than throwing on a duplicate key.
     private static void SetOptions(GridColumn<TItem> col, IReadOnlyList<GridOption> options)
     {
         col.Options = options;
@@ -348,20 +480,28 @@ else if (_config is not null)
         col.OptionLabels = labels;
     }
 
-    // ------------------------------------------------- filtrování, řazení, stránky
+    // ------------------------------------------------- filtering, sorting, paging
 
+    /// <summary>
+    /// Recomputes <c>_view</c> from <c>_items</c>: all active filters (combined with AND), then the sort.
+    /// This is the only place where the visible result is derived, so every user action just changes
+    /// state (a filter value, the sort column) and calls this method.
+    /// </summary>
     private void Apply()
     {
+        // Lazy LINQ chain: each active filter wraps the previous query, nothing runs until ToList().
         IEnumerable<TItem> query = _items;
 
         foreach (var col in _columns.Where(c => c.FilterType.Length > 0))
         {
+            // Inactive (untouched) filters are skipped completely, so they cost nothing per row.
             if (_filters.TryGetValue(col.Field, out var f) && f.IsActive)
                 query = query.Where(i => GridFiltering.Matches(col.Get(i), col.FilterType, f));
         }
 
         var list = query.ToList();
 
+        // The sort is stable (LINQ OrderBy), so rows with equal values keep their previous relative order.
         var sortColumn = _columns.FirstOrDefault(c => c.Field == _sortField);
         if (sortColumn is not null)
         {
@@ -371,22 +511,27 @@ else if (_config is not null)
         }
 
         _view = list;
+
+        // Keep the current page valid: filtering may have reduced the number of pages below the current one.
         if (_page > PageCount) _page = PageCount;
         if (_page < 1) _page = 1;
     }
 
+    // Called by every filter control: a changed filter means a different result set, so go back to the first page.
     private void Changed()
     {
         _page = 1;
         Apply();
     }
 
+    // Replaces each FilterState with a fresh one (rather than clearing fields) so no input can be left behind.
     private void ResetFilters()
     {
         foreach (var key in _filters.Keys.ToList()) _filters[key] = new FilterState();
         Changed();
     }
 
+    // Header click. Clicking the current column toggles the direction; clicking another column sorts it ascending.
     private void SortBy(string key)
     {
         _desc = _sortField == key && !_desc;
@@ -395,6 +540,7 @@ else if (_config is not null)
         Apply();
     }
 
+    // Changing the page does not alter the result set, so Apply() is not needed, only a re-render.
     private void OnPageChanged(int page) => _page = page;
 
     private void ToggleColumn(string field, bool on)
@@ -403,21 +549,32 @@ else if (_config is not null)
         else _shown.Remove(field);
     }
 
-    // -------------------------------------------------------------- vykreslení
+    // ------------------------------------------------------------ rendering
 
+    // Numbers are right-aligned (by data type, not display type, so Currency and Number columns line up alike).
     private static string? AlignStyle(GridColumn<TItem> col) =>
         col.Config.DataType.Equals("Integer", StringComparison.OrdinalIgnoreCase)
         || col.Config.DataType.Equals("Decimal", StringComparison.OrdinalIgnoreCase)
             ? "text-align:right" : null;
 
+    // The single place where a cell value becomes text. Used by both the table and the CSV export,
+    // so what the user sees and what the export contains cannot drift apart.
     private string CellText(TItem item, GridColumn<TItem> col) =>
         GridCellRenderers.Get(col.Config.DisplayType)
             .Text(new GridCellContext(col.Get(item), col.Config, col.OptionLabels));
 
+    // Expands the detailUrl template for one row, e.g. "orders/{Id}" -> "orders/42".
+    // Each substituted value is URL-escaped so a value containing "/", "?" or "#" cannot change the target.
+    // The link is relative, so it resolves against the application's base address.
     private string LinkFor(TItem item) =>
         Regex.Replace(_config!.DetailUrl ?? "", @"\{(\w+)\}",
             m => Uri.EscapeDataString(GridValue.Key(_linkGetters[m.Groups[1].Value](item)) ?? ""));
 
+    /// <summary>
+    /// Produces the content of one table cell. Order of precedence: a custom template for the column
+    /// (<see cref="CellTemplates"/>), otherwise the markup implied by the renderer's <see cref="CellKind"/>
+    /// (check icon, link, or plain text).
+    /// </summary>
     private RenderFragment RenderCell(TItem item, GridColumn<TItem> col)
     {
         if (CellTemplates is not null && CellTemplates.TryGetValue(col.Field, out var template))
@@ -444,8 +601,18 @@ else if (_config is not null)
         return plain;
     }
 
-    // -------------------------------------------------------------- export CSV
+    // ------------------------------------------------------------ CSV export
 
+    /// <summary>
+    /// Exports what the user currently sees, as a CSV file: the visible columns and ALL rows that pass the
+    /// filters (not just the current page), in the current sort order. Values are the same texts the table shows.
+    /// </summary>
+    /// <remarks>
+    /// Format choices made for opening the file directly in Excel in a Czech locale: semicolon as the separator
+    /// (the list separator there is not a comma) and a UTF-8 byte order mark so that accented characters are
+    /// read correctly. The file is handed to the browser through the <c>downloadFile</c> script in <c>index.html</c>
+    /// as base64, because Blazor WebAssembly cannot write files itself.
+    /// </remarks>
     private async Task ExportAsync()
     {
         var cols = VisibleColumns.ToList();
@@ -461,9 +628,17 @@ else if (_config is not null)
         await Js.InvokeVoidAsync("downloadFile", fileName, "text/csv;charset=utf-8", Convert.ToBase64String(bytes));
     }
 
+    // Escapes one CSV field. Two separate concerns:
+    //  1. Formula injection: a text cell starting with = + - @ (or tab/CR) is executed as a formula by Excel
+    //     and similar tools, so an attacker-controlled value such as a customer name could run a formula
+    //     when someone opens the export. A leading apostrophe makes the spreadsheet treat it as text.
+    //     The guard is applied only to String columns (guardFormula) because a legitimate negative number
+    //     such as "-5,00" must stay a number.
+    //  2. CSV syntax: a field containing the separator, a quote or a line break is wrapped in quotes,
+    //     and quotes inside it are doubled.
     private static string Csv(string value, bool guardFormula)
     {
-        // text začínající = + - @ by tabulkový procesor vyhodnotil jako vzorec
+        // text starting with = + - @ would be evaluated as a formula by the spreadsheet
         if (guardFormula && value.Length > 0 && "=+-@\t\r".Contains(value[0]))
             value = "'" + value;
 

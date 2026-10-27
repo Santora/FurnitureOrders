@@ -3,6 +3,7 @@
 
 <PageTitle>Zákazníci (dynamický grid)</PageTitle>
 
+@* Same pattern as GridOrders: row type + config name (wwwroot/grids/customers.json) + data source. *@
 <DynamicGrid TItem="CustomerListItemDto" ConfigName="customers" LoadItems="LoadAsync" />
 
 @code {

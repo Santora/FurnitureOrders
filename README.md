@@ -173,23 +173,90 @@ Balíček `System.Security.Cryptography.Pkcs` je v projektu `FurnitureOrders.Api
 
 ## Bonus: dynamický přehledový grid
 
-Znovupoužitelná komponenta `DynamicGrid<TItem>` zobrazuje přehledy podle konfigurace v JSON souborech (`FurnitureOrders.Client/wwwroot/grids/*.json`). Použita je pro dvě evidence: zákazníky (`/grid/customers`, konfigurace `customers.json`) a zakázky (`/grid/orders`, konfigurace `orders.json`). Odkazy jsou v menu *Přehledy (grid)*.
+Znovupoužitelná komponenta `DynamicGrid<TItem>` zobrazuje přehledy podle konfigurace v JSON souborech (`FurnitureOrders.Client/wwwroot/grids/*.json`). Použita je pro dvě evidence: zákazníky (`/grid/customers`, konfigurace `customers.json`) a zakázky (`/grid/orders`, konfigurace `orders.json`). Odkazy jsou v menu *Přehledy (grid)*. Podrobná dokumentace přímo v kódu (anglicky) začíná úvodním přehledem na začátku souboru `FurnitureOrders.Shared/Grid/GridConfig.cs`.
 
-**Hotovo:**
+### Jak přidat nový přehled
 
-- Konfigurace sloupce: název vlastnosti, záhlaví, datový typ, způsob zobrazení, pořadí, viditelnost, řazení, filtrování a formát. Zobrazení: text, číslo, desetinné číslo, datum, datum a čas, zaškrtávací pole, výběr, odkaz na detail a peněžní hodnota. Filtry: textový, číselný rozsah, rozsah dat, zaškrtávací pole a výběr. Zdroje hodnot výběru: statický seznam, výčet, hodnoty z dat a číselník související evidence (např. zákazníci).
-- Validace konfigurace (`GridConfigValidator`) včetně kontroly kompatibility typů. Neplatná konfigurace se nezobrazí jako výjimka, ale jako přehledný seznam chyb. Kontrolu konfigurací dodaných s aplikací zajišťuje automatizovaný test.
-- Typová bezpečnost: každé pole z konfigurace se při načtení ověří proti vlastnostem DTO včetně datového typu, hodnoty se čtou zkompilovanými přístupovými funkcemi.
-- Rozšiřitelnost: nový typ zobrazení je registrace v `GridCellRenderers` a přidání názvu do `GridVocabulary`, komponenta se nemění. Podporovány jsou i vlastní šablony buněk (`CellTemplates`).
-- Řazení, filtrování a stránkování, uživatelské skrývání sloupců, export aktuálního přehledu do CSV (s ochranou proti vložení vzorce do tabulkového procesoru), více konfigurací na jednu evidenci (každá je samostatný soubor).
+1. Do `wwwroot/grids/` přidat soubor `{název}.json` s popisem sloupců.
+2. Přidat stránku s jednou komponentou. Komponenta o API nic neví, řádky jí dodává delegát:
 
-**Není hotovo:**
+```razor
+@page "/grid/orders"
+@inject OrderApiClient Api
 
-- Filtrování, řazení a stránkování na straně serveru (nyní probíhají v paměti klienta nad načteným seznamem).
-- Ukládání konfigurace do databáze a uživatelská změna pořadí sloupců.
-- Registr nových typů filtrů: nový typ filtru vyžaduje úpravu `GridFiltering` a bloku filtrů v komponentě.
+<DynamicGrid TItem="OrderListItemDto" ConfigName="orders" LoadItems="LoadAsync" />
 
-**Technická rozhodnutí a pokračování:** logika bez závislosti na Blazoru (modely konfigurace, validace, filtrování, formátování, vazba sloupců) je ve `Shared`, aby byla testovatelná. Dalším krokem by bylo přesunout filtrování a řazení na server přes parametrizovaný dotaz s whitelistem polí z konfigurace, uložit konfigurace do databáze s verzováním a přidat uživatelské nastavení sloupců.
+@code {
+    private async Task<IReadOnlyList<OrderListItemDto>> LoadAsync(CancellationToken ct) =>
+        await Api.ListAsync(new OrderQuery(null, null, null, null, null, "created", true), ct);
+}
+```
+
+Komponenta ani žádná jiná třída se nemění.
+
+### Konfigurace
+
+```json
+{
+  "entity": "Order",
+  "title": "Zakázky (dynamický grid)",
+  "pageSize": 10,
+  "detailUrl": "orders/{Id}",
+  "defaultSort": { "field": "CreatedDate", "direction": "Descending" },
+  "columns": [
+    { "field": "OrderNumber", "label": "Číslo zakázky", "dataType": "String", "displayType": "DetailLink",
+      "filterType": "TextBox", "sortable": true, "filterable": true, "visible": true, "order": 1 }
+  ]
+}
+```
+
+| Položka | Význam |
+|---|---|
+| `entity`, `title` | Povinné. `entity` určuje název souboru při exportu do CSV, `title` je nadpis přehledu. |
+| `pageSize` | Počet řádků na stránku, povoleno 5 až 200. |
+| `detailUrl` | Šablona odkazu pro zobrazení `DetailLink`, např. `orders/{Id}`. Zástupný výraz je název libovolné veřejné vlastnosti řádku, hodnota se do adresy vkládá s ošetřením speciálních znaků. |
+| `defaultSort` | Počáteční řazení. Sloupec musí existovat a mít `sortable: true`. |
+| `field` | Název vlastnosti DTO (nezáleží na velikosti písmen). Musí být v přehledu jedinečný. |
+| `dataType` | Co hodnota je: `String`, `Integer`, `Decimal`, `Date`, `DateTime`, `Boolean`, `Enum`. Ověřuje se proti skutečnému typu vlastnosti. |
+| `displayType` | Jak se hodnota zobrazí: `Text`, `Number`, `Decimal`, `Currency`, `Date`, `DateTime`, `Checkbox`, `Select`, `DetailLink`. |
+| `filterType` | `TextBox`, `NumberRange`, `DateRange`, `CheckBox`, `Select`. Bez uvedení se odvodí z `dataType`. Použije se jen u sloupců s `filterable: true`. |
+| `format` | Volitelný formátovací řetězec .NET (např. `N2`, `dd.MM.yyyy`). Chybný formát grid neshodí, zobrazí se surová hodnota. |
+| `order`, `visible`, `sortable`, `filterable` | Pořadí zleva doprava, počáteční viditelnost, řazení kliknutím na záhlaví a zobrazení filtru. |
+| `options` | Zdroj hodnot pro `Select`: `Static` (položky přímo v JSON), `Enum` (registrovaný výčet), `Distinct` (hodnoty z načtených dat), `Lookup` (poskytovatel, např. `customers`). |
+
+`dataType` a `displayType` jsou oddělené záměrně: první říká, co hodnota je, a kontroluje se proti kódu, druhý jak vypadá. Smysluplné dvojice hlídá validátor (např. `Currency` jen pro číselný typ, `Checkbox` jen pro `Boolean`).
+
+### Jak konfigurace putuje
+
+`GridConfigLoader` (načtení souboru, název se omezuje na písmena, číslice, `_` a `-`) → `GridConfigParser` (JSON na objekt, nikdy nevyhodí výjimku kvůli obsahu) → `GridConfigValidator` (vnitřní konzistence, bez znalosti DTO) → `GridColumnBinder` (ověření proti skutečné vlastnosti DTO a jejímu typu, vytvoření přístupových funkcí) → `DynamicGrid` (volby, data, filtrování, řazení, stránkování, vykreslení).
+
+Chyby ze všech kroků se shromažďují a zobrazí jako jeden seznam. Neplatná konfigurace se tak nikdy nezobrazí jako částečně funkční grid ani jako výjimka. Příklady kontrol: neznámý typ, `Currency` na textovém sloupci, `Select` bez `options`, `DetailLink` bez `detailUrl`, vlastnost, která v DTO neexistuje, nebo `string` označený jako `Integer`.
+
+### Co je hotovo
+
+- Konfigurace sloupce (viz tabulka výše), pět typů filtrů a čtyři zdroje hodnot výběru.
+- Řazení, filtrování (filtry se kombinují logickým AND), stránkování, uživatelské skrývání sloupců, export aktuálního přehledu do CSV a více konfigurací na jednu evidenci (každá je samostatný soubor).
+- Export do CSV obsahuje viditelné sloupce a všechny řádky, které prošly filtrem (ne jen aktuální stránku), ve stejném textu, jaký vidí uživatel. Textové hodnoty začínající `=`, `+`, `-` nebo `@` se prefixují apostrofem, aby je tabulkový procesor nevyhodnotil jako vzorec. Oddělovačem je středník a soubor má znak BOM kvůli otevření v Excelu v českém prostředí.
+- Typová bezpečnost: pole z konfigurace se při načtení ověří proti DTO včetně datového typu a hodnoty se čtou předem sestavenými přístupovými funkcemi, ne reflexí pro každou buňku. Z konfigurace je dosažitelná jen veřejná čtecí vlastnost, nikdy metoda ani soukromý člen.
+- Hodnoty pro porovnání a filtry se převádějí nezávisle na kultuře (jinak by se např. rozsah cen choval jinak podle nastavení prohlížeče), zobrazení respektuje kulturu uživatele.
+- Rozšiřitelnost bez zásahu do komponenty: nový typ zobrazení je `GridCellRenderers.Register` plus název v `GridVocabulary`, nový výčet je řádek v `GridEnums`, nový číselník je záznam v `GridLookups`. Jednotlivý sloupec lze vykreslit vlastní šablonou (`CellTemplates`).
+- Kontrolu konfigurací dodaných s aplikací zajišťuje automatizovaný test.
+
+### Není hotovo a známá omezení
+
+- Filtrování, řazení a stránkování probíhají v paměti klienta nad celým načteným seznamem. Pro stovky až nízké tisíce řádků je to v pořádku, pro větší objemy je potřeba dotaz na straně serveru.
+- Data se načítají jednou při otevření přehledu, bez automatického obnovení. Změna dat vyžaduje opětovné otevření stránky (při chybě načtení je tlačítko *Zkusit znovu*).
+- JSON se čte shovívavě: neznámá nebo chybně napsaná položka (např. `sortabel`) se ignoruje a sloupec dostane výchozí hodnotu. Přísnější čtení by bylo nastavení `UnmappedMemberHandling.Disallow` v `GridConfigParser`.
+- Symbol měny je v zobrazení `Currency` pevně „Kč“, `format` ovlivňuje jen číselnou část.
+- Ukládání konfigurace do databáze, uživatelská změna pořadí sloupců a jejich uložení mezi návštěvami.
+- Nový typ filtru není jen konfigurační záležitost: vyžaduje úpravu `GridFiltering`, `GridVocabulary` a bloku filtrů v komponentě.
+- Při změně `ConfigName` za běhu by se mohly dvě inicializace překrývat. Přehledy se v aplikaci otevírají vždy s pevným názvem konfigurace, takže se to neprojeví.
+
+### Technická rozhodnutí a pokračování
+
+Logika bez závislosti na Blazoru (modely konfigurace, parser, validace, filtrování, formátování, vazba sloupců) je ve `Shared`, aby byla testovatelná bez prohlížeče. V `Client` zůstává jen to, co potřebuje Blazor nebo služby aplikace: komponenta, načtení souboru, registr výčtů a registr číselníků. Výčty a číselníky jsou záměrně explicitní seznamy, aby konfigurační soubor mohl vyvolat jen to, co vývojář vědomě zpřístupnil. Projekt `Client` uvádí `FurnitureOrders.Shared` jako kořenové sestavení pro ořezávání (`TrimmerRootAssembly`), protože vlastnosti DTO se z konfigurace dohledávají podle názvu a bez toho by je při publikaci mohl ořezávač odstranit.
+
+Dalším krokem by bylo přesunout filtrování a řazení na server přes parametrizovaný dotaz s whitelistem polí z konfigurace, uložit konfigurace do databáze s verzováním a přidat uživatelské nastavení sloupců.
 
 ## Předpoklady a rozhodnutí
 

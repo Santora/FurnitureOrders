@@ -3,6 +3,11 @@
 
 <PageTitle>Zakázky (dynamický grid)</PageTitle>
 
+@*
+    The whole page: everything about the columns lives in wwwroot/grids/orders.json.
+    This page only supplies (a) the row type, (b) the config name and (c) the data source.
+    The query asks for the newest orders first; the grid then filters, sorts and pages that list in memory.
+*@
 <DynamicGrid TItem="OrderListItemDto" ConfigName="orders" LoadItems="LoadAsync" />
 
 @code {
